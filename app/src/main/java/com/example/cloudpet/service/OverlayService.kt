@@ -7,6 +7,7 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.view.*
+import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebSettings
@@ -71,16 +72,48 @@ class OverlayService : Service() {
         windowManager?.addView(overlayView, params)
     }
 
+    private var lastKbState = false
+    private var lastBatteryState = ""
+
     private fun startPolling() {
         handler.postDelayed(object : Runnable {
             override fun run() {
-                supabase.fetchPetState { state ->
-                    val mood = state ?: "idle"
+                // 检测键盘状态
+                val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+                val kbActive = imm.isAcceptingText
+                if (kbActive != lastKbState) {
+                    lastKbState = kbActive
+                    val state = if (kbActive) "typing" else "idle"
                     overlayView?.evaluateJavascript(
-                        "window.petEngine && window.petEngine.setState('$mood')", null
+                        "window.petEngine && window.petEngine.setState('$state')", null
                     )
                 }
-                handler.postDelayed(this, 5000) // 每5秒轮询
+
+                // 检测充电状态
+                val intent = registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                val plugged = intent?.getIntExtra("plugged", -1) ?: -1
+                val isCharging = plugged == android.os.BatteryManager.BATTERY_PLUGGED_AC ||
+                                 plugged == android.os.BatteryManager.BATTERY_PLUGGED_USB
+                val battState = if (isCharging) "charging" else ""
+                if (battState != lastBatteryState) {
+                    lastBatteryState = battState
+                    if (isCharging) {
+                        overlayView?.evaluateJavascript(
+                            "window.petEngine && window.petEngine.setState('charging')", null
+                        )
+                    }
+                }
+
+                // 从 Supabase 获取状态
+                supabase.fetchPetState { state ->
+                    if (!kbActive && !isCharging) {
+                        val mood = state ?: "idle"
+                        overlayView?.evaluateJavascript(
+                            "window.petEngine && window.petEngine.setState('$mood')", null
+                        )
+                    }
+                }
+                handler.postDelayed(this, 3000)
             }
         }, 1000)
     }
