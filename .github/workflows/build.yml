@@ -17,21 +17,19 @@ jobs:
           java-version: 17
           distribution: temurin
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+          echo "SDK: $ANDROID_HOME"
+          ls $ANDROID_HOME/ 2>/dev/null
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" 2>/dev/null || true
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tail -50
 
-      - name: Upload APK to Release
-        uses: ncipollo/release-action@v1
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          tag: v1.0.${{ github.run_number }}
-          name: "云宝 CloudPet v1.0.${{ github.run_number }}"
-          body: "☁️ 自动构建 APK"
-          artifacts: "app/build/outputs/apk/debug/*.apk"
-          token: ${{ secrets.GITHUB_TOKEN }}
-          allowUpdates: true
-          replacesArtifacts: true
+          name: CloudPet-debug
+          path: "**/outputs/apk/debug/*.apk"
