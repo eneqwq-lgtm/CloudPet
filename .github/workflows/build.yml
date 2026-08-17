@@ -23,11 +23,15 @@ jobs:
       - name: Build APK
         run: |
           chmod +x gradlew
-          ls $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms"
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tail -40
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Upload APK to Release
+        uses: ncipollo/release-action@v1
         with:
-          name: CloudPet-debug
-          path: "**/outputs/apk/debug/*.apk"
+          tag: v1.0.${{ github.run_number }}
+          name: "云宝 CloudPet v1.0.${{ github.run_number }}"
+          body: "☁️ 自动构建 APK"
+          artifacts: "app/build/outputs/apk/debug/*.apk"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: true
+          replacesArtifacts: true
