@@ -1,6 +1,7 @@
 package com.example.cloudpet.service
 
 import android.app.*
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
@@ -34,13 +35,16 @@ class OverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("云宝正在看着你~"))
+        startForeground(NOTIFICATION_ID, buildNotification("🦀 小螃蟹正在看着你~"))
         setupOverlay()
         startPolling()
     }
 
     private fun setupOverlay() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
 
         params = WindowManager.LayoutParams(
             dpToPx(PET_SIZE_DP),
@@ -52,8 +56,8 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 50
-            y = 300
+            x = screenWidth - dpToPx(PET_SIZE_DP) - 20
+            y = 100
         }
 
         overlayView = WebView(this).apply {
@@ -72,50 +76,152 @@ class OverlayService : Service() {
         windowManager?.addView(overlayView, params)
     }
 
+    // === 状态追踪 ===
     private var lastKbState = false
-    private var lastBatteryState = ""
+    private var lastChargingState = false
+    private var lastForegroundApp = ""
+    private var isMiniPeek = false
+    private var screenWidth = 0
 
     private fun startPolling() {
+        screenWidth = resources.displayMetrics.widthPixels
+
         handler.postDelayed(object : Runnable {
             override fun run() {
-                // 检测键盘状态
+                val displayMetrics = resources.displayMetrics
+                screenWidth = displayMetrics.widthPixels
+
+                // 1. 检测键盘状态
                 val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
                 val kbActive = imm.isAcceptingText
                 if (kbActive != lastKbState) {
                     lastKbState = kbActive
-                    val state = if (kbActive) "typing" else "idle"
-                    overlayView?.evaluateJavascript(
-                        "window.petEngine && window.petEngine.setState('$state')", null
-                    )
+                    if (kbActive) {
+                        pushState("thinking", "💭 打字中...")
+                    } else {
+                        pushState("idle", "🦀")
+                    }
                 }
 
-                // 检测充电状态
+                // 如果键盘开着，优先显示打字状态，不执行其他检测
+                if (kbActive) {
+                    handler.postDelayed(this, 2000)
+                    return
+                }
+
+                // 2. 检测充电状态（只触发一次）
                 val intent = registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                 val plugged = intent?.getIntExtra("plugged", -1) ?: -1
                 val isCharging = plugged == android.os.BatteryManager.BATTERY_PLUGGED_AC ||
                                  plugged == android.os.BatteryManager.BATTERY_PLUGGED_USB
-                val battState = if (isCharging) "charging" else ""
-                if (battState != lastBatteryState) {
-                    lastBatteryState = battState
-                    if (isCharging) {
-                        overlayView?.evaluateJavascript(
-                            "window.petEngine && window.petEngine.setState('charging')", null
-                        )
+                if (isCharging && !lastChargingState) {
+                    lastChargingState = true
+                    pushState("error", "🔋 充电中...")
+                    // 2秒后恢复待机
+                    handler.postDelayed({
+                        pushState("idle", "🦀")
+                    }, 2000)
+                } else if (!isCharging) {
+                    lastChargingState = false
+                }
+
+                // 3. 检测前台 App
+                val currentApp = getForegroundApp()
+                if (currentApp != null && currentApp != lastForegroundApp) {
+                    lastForegroundApp = currentApp
+                    handleAppSwitch(currentApp)
+                }
+
+                // 4. 边缘检测
+                checkEdgePosition()
+
+                // 5. Supabase 状态同步
+                supabase.fetchPetState { state ->
+                    if (state != null) {
+                        pushState(state, "")
                     }
                 }
 
-                // 从 Supabase 获取状态
-                supabase.fetchPetState { state ->
-                    if (!kbActive && !isCharging) {
-                        val mood = state ?: "idle"
-                        overlayView?.evaluateJavascript(
-                            "window.petEngine && window.petEngine.setState('$mood')", null
-                        )
-                    }
-                }
-                handler.postDelayed(this, 3000)
+                handler.postDelayed(this, 2000)
             }
         }, 1000)
+    }
+
+    private fun getForegroundApp(): String? {
+        try {
+            val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val time = System.currentTimeMillis()
+            val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 5000, time)
+            if (stats != null) {
+                val sortedStats = stats.sortedByDescending { it.lastTimeUsed }
+                if (sortedStats.isNotEmpty()) {
+                    return sortedStats[0].packageName
+                }
+            }
+        } catch (e: Exception) {
+            // 无权限时静默忽略
+        }
+        return null
+    }
+
+    private fun handleAppSwitch(pkg: String) {
+        when {
+            pkg.contains("termux") -> {
+                pushState("typing", "⌨️ Termux 中...")
+                // 离开 Termux 时恢复，通过轮询检测
+            }
+            pkg.contains("microsoft.emmx") || pkg.contains("edge") -> {
+                pushStateOnce("debugger", "🔍 Edge 浏览器")
+            }
+            pkg.contains("cloudmusic") || pkg.contains("netease") -> {
+                pushStateOnce("groove", "🎵 听歌中")
+            }
+            pkg.contains("notes") || pkg.contains("notepad") || pkg.contains("keep") -> {
+                pushStateOnce("reading", "📖 看笔记")
+            }
+            else -> {
+                // 非特殊 App，恢复待机
+                if (!isMiniPeek) {
+                    pushState("idle", "🦀")
+                }
+            }
+        }
+    }
+
+    private fun checkEdgePosition() {
+        val x = params?.x ?: 0
+        val edgeThreshold = dpToPx(10)
+        val shouldPeek = x < edgeThreshold || x > screenWidth - dpToPx(PET_SIZE_DP) - edgeThreshold
+
+        if (shouldPeek && !isMiniPeek) {
+            isMiniPeek = true
+            pushState("peek", "🦀 偷偷看")
+        } else if (!shouldPeek && isMiniPeek) {
+            isMiniPeek = false
+            pushState("idle", "🦀")
+        }
+    }
+
+    private var lastOnceState = ""
+    private fun pushStateOnce(state: String, text: String) {
+        if (state == lastOnceState) return
+        lastOnceState = state
+        pushState(state, text)
+        // 3秒后自动恢复
+        handler.postDelayed({
+            lastOnceState = ""
+            if (!isMiniPeek) {
+                pushState("idle", "🦀")
+            } else {
+                pushState("peek", "🦀 偷偷看")
+            }
+        }, 3000)
+    }
+
+    private fun pushState(state: String, text: String) {
+        overlayView?.evaluateJavascript(
+            "window.petEngine && window.petEngine.setState('$state', '$text')", null
+        )
     }
 
     // === 手势处理 ===
@@ -191,7 +297,7 @@ class OverlayService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("☁️ 云宝")
+            .setContentTitle("🦀 Clawd")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setContentIntent(pendingIntent)
@@ -203,7 +309,7 @@ class OverlayService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID, "云宝",
+                CHANNEL_ID, "Clawd",
                 NotificationManager.IMPORTANCE_LOW
             ).apply { setShowBadge(false) }
             getSystemService(NotificationManager::class.java)
