@@ -20,20 +20,18 @@ jobs:
       - name: Build with Gradle
         run: |
           chmod +x gradlew
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ls $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms dir"
-          # Accept licenses
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
-          yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses 2>/dev/null || true
-          # Install platform if needed
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" 2>/dev/null || true
-          ./gradlew assembleDebug --no-daemon 2>&1 | tail -30
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Find and Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: CloudPet-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          path: |
+            **/outputs/apk/debug/*.apk
+            **/outputs/apk/*.apk
+
+      - name: List build outputs
+        if: always()
+        run: |
+          find . -name "*.apk" -type f 2>/dev/null || echo "No APK found"
+          ls -la app/build/outputs/ 2>/dev/null || echo "No outputs dir"
