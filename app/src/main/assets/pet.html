@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: transparent;
+}
+#pet {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s;
+}
+#pet img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    transition: opacity 0.3s;
+}
+</style>
+</head>
+<body>
+<div id="pet"></div>
+<script>
+const PET = {
+    // 状态→SVG映射
+    svgs: {
+        idle: 'cloudling-idle.svg',
+        thinking: 'cloudling-thinking.svg',
+        working: 'cloudling-typing.svg',
+        sleeping: 'cloudling-sleeping.svg',
+        celebrate: 'cloudling-juggling.svg',
+        speaking: 'cloudling-attention.svg',
+        error: 'cloudling-error.svg',
+        building: 'cloudling-building.svg',
+        reading: 'cloudling-idle-reading.svg',
+        dozing: 'cloudling-dozing.svg',
+        carrying: 'cloudling-carrying.svg',
+        conducting: 'cloudling-conducting.svg',
+        notification: 'cloudling-notification.svg',
+    },
+    currentState: 'idle',
+    currentSvg: null,
+
+    init() {
+        this.loadSvg('idle');
+        // 监听来自 Android 的状态更新
+        window.petEngine = this;
+    },
+
+    loadSvg(state) {
+        const svgName = this.svgs[state] || this.svgs.idle;
+        if (svgName === this.currentSvg) return;
+        this.currentSvg = svgName;
+        this.currentState = state;
+
+        const container = document.getElementById('pet');
+        // 使用内联SVG (从assets加载)
+        fetch(svgName)
+            .then(r => r.text())
+            .then(svg => {
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = svg;
+                const svgEl = wrapper.querySelector('svg');
+                if (svgEl) {
+                    svgEl.style.width = '100%';
+                    svgEl.style.height = '100%';
+                    container.innerHTML = '';
+                    container.appendChild(svgEl);
+                }
+            })
+            .catch(() => {
+                container.innerHTML = '<div style="font-size:60px;text-align:center;">☁️</div>';
+            });
+    },
+
+    setState(state) {
+        this.loadSvg(state);
+    },
+
+    // 交互反馈
+    onTap() {
+        this.loadSvg('attention');
+        setTimeout(() => this.loadSvg(this.currentState), 1000);
+    },
+
+    onDoubleTap() {
+        this.loadSvg('juggling');
+        setTimeout(() => this.loadSvg(this.currentState), 1500);
+    },
+
+    onLongPress() {
+        this.loadSvg('error');
+        setTimeout(() => this.loadSvg(this.currentState), 800);
+    }
+};
+
+PET.init();
+</script>
+</body>
+</html>
