@@ -53,7 +53,6 @@ class OverlayService : Service() {
             dpToPx(PET_HEIGHT_DP),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
             WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -149,40 +148,48 @@ class OverlayService : Service() {
         }, 1000)
     }
 
+    private var hasUsageStatsPermission = false
+
     private fun getForegroundApp(): String? {
         // 方法1: 使用 UsageStatsManager (需要权限)
+        // 注意: 用户需在 设置 → 应用 → 特殊权限 → 使用情况访问 中开启
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             try {
                 val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
                 val time = System.currentTimeMillis()
-                val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 2000, time)
+                // 查最近 5 分钟的数据，确保有缓存
+                val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 300_000, time)
                 if (stats != null && stats.isNotEmpty()) {
                     val sorted = stats.sortedByDescending { it.lastTimeUsed }
-                    return sorted[0].packageName
+                    val top = sorted[0].packageName
+                    if (top != packageName) {
+                        hasUsageStatsPermission = true
+                        return top
+                    }
                 }
             } catch (_: Exception) {}
         }
-        // 方法2: 使用 RunningAppProcessInfo (不需要权限，Android 11+ 受限)
+        // 方法2: 使用 dumpsys activity recents (Android 5+ 可靠)
+        // 通过 shell 命令获取当前前台 Activity 的包名
         try {
-            val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
-                val ranks = am.runningAppProcesses
-                if (ranks != null && ranks.isNotEmpty()) {
-                    for (info in ranks) {
-                        if (info.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
-                            return info.processName.split(":").first()
-                        }
-                    }
-                }
-            } else {
-                val processes = am.runningAppProcesses
-                if (processes != null && processes.isNotEmpty()) {
-                    for (p in processes) {
-                        if (p.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
-                            return p.pkgList.firstOrNull()
-                        }
-                    }
-                }
+            val proc = Runtime.getRuntime().exec("dumpsys activity recents 2>/dev/null | grep 'Recent #0' | cut -d' ' -f4 | cut -d'/' -f1")
+            val reader = java.io.BufferedReader(java.io.InputStreamReader(proc.inputStream))
+            val pkg = reader.readLine()?.trim()
+            reader.close()
+            proc.waitFor()
+            if (!pkg.isNullOrEmpty() && pkg != packageName) {
+                return pkg
+            }
+        } catch (_: Exception) {}
+        // 方法3: fallback 用 dumpsys window
+        try {
+            val proc = Runtime.getRuntime().exec("dumpsys window 2>/dev/null | grep mCurrentFocus | cut -d' ' -f5 | cut -d'/' -f1")
+            val reader = java.io.BufferedReader(java.io.InputStreamReader(proc.inputStream))
+            val pkg = reader.readLine()?.trim()
+            reader.close()
+            proc.waitFor()
+            if (!pkg.isNullOrEmpty() && pkg != packageName) {
+                return pkg
             }
         } catch (_: Exception) {}
         return null
@@ -285,10 +292,10 @@ class OverlayService : Service() {
                         var newY = initialY + dy
                         val petW = dpToPx(PET_SIZE_DP)
                         val petH = dpToPx(PET_HEIGHT_DP)
-                        // 限制左右边界
-                        newX = newX.coerceIn(-dpToPx(30), screenWidth - petW + dpToPx(30))
-                        // 限制上下边界
-                        newY = newY.coerceIn(-dpToPx(30), resources.displayMetrics.heightPixels - petH + dpToPx(30))
+                        // 限制左右边界 (0 ~ 屏幕宽度-宠物宽度)
+                        newX = newX.coerceIn(0, screenWidth - petW)
+                        // 限制上下边界 (0 ~ 屏幕高度-宠物高度)
+                        newY = newY.coerceIn(0, resources.displayMetrics.heightPixels - petH)
                         params?.x = newX
                         params?.y = newY
                         windowManager?.updateViewLayout(overlayView, params)
@@ -306,6 +313,9 @@ class OverlayService : Service() {
                                 onTap()
                             }
                         }
+                    } else {
+                        // 松手后立即吸附边缘 (不用等 2 秒轮询)
+                        checkEdgePosition()
                     }
                     true
                 }
