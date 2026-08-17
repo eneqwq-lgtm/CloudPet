@@ -12,24 +12,14 @@ html, body {
     user-select: none;
     -webkit-user-select: none;
 }
-#pet {
+#container {
     width: 100%; height: 100%;
-    position: relative;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
 }
-#pet img {
-    width: 85%; height: 85%;
-    object-fit: contain;
-    transition: opacity 0.3s;
-    z-index: 1;
-}
 #bubble {
-    position: absolute;
-    top: 10%;
-    left: 50%;
-    transform: translateX(-50%);
     background: rgba(255,255,255,0.92);
     color: #333;
     padding: 3px 8px;
@@ -44,15 +34,28 @@ html, body {
     box-shadow: 0 1px 4px rgba(0,0,0,0.12);
     pointer-events: none;
     line-height: 1.3;
+    margin-bottom: 2px;
 }
 #bubble.show {
     opacity: 1;
 }
+#pet {
+    width: 85%; height: 75%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#pet img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    transition: opacity 0.3s;
+}
 </style>
 </head>
 <body>
-<div id="pet">
+<div id="container">
     <div id="bubble"></div>
+    <div id="pet"></div>
 </div>
 <script>
 var PET = {
@@ -89,8 +92,8 @@ var PET = {
         var s = this.states[state] || this.states.idle;
         this.currentFile = s.file;
         this.currentState = state;
-        var container = document.getElementById('pet');
-        var img = container.querySelector('img');
+        var pet = document.getElementById('pet');
+        var img = pet.querySelector('img');
         if (img) {
             img.src = s.file;
             img.alt = state;
@@ -98,10 +101,10 @@ var PET = {
             img = document.createElement('img');
             img.src = s.file;
             img.alt = state;
-            img.style.width = '85%';
-            img.style.height = '85%';
+            img.style.width = '100%';
+            img.style.height = '100%';
             img.style.objectFit = 'contain';
-            container.insertBefore(img, container.firstChild);
+            pet.appendChild(img);
         }
         this.showBubble(s.text);
     },
