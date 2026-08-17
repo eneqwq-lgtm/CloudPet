@@ -17,14 +17,20 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Build debug APK
-        run: |
-          # 检查 Android SDK 环境
-          echo "ANDROID_HOME: $ANDROID_HOME"
-          # 使用 sdkmanager 确保必要的组件
-          yes | sdkmanager --install "platforms;android-34" "build-tools;34.0.0" 2>/dev/null || true
-          # 直接使用 gradle 命令
-          gradle assembleDebug --no-daemon
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Create local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew || true
+
+      - name: Build with Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
+          arguments: assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
