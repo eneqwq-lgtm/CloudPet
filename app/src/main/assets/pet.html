@@ -18,6 +18,7 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: visible;
 }
 #pet img {
     width: 90%; height: 90%;
@@ -27,31 +28,33 @@ html, body {
 }
 #bubble {
     position: absolute;
-    top: -15px;
+    bottom: 105%;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(255,255,255,0.95);
     color: #333;
-    padding: 6px 10px;
-    border-radius: 12px;
+    padding: 5px 10px;
+    border-radius: 10px;
     font-size: 11px;
     font-family: sans-serif;
-    max-width: 140px;
+    max-width: 150px;
+    width: max-content;
     text-align: center;
-    white-space: nowrap;
     opacity: 0;
     transition: opacity 0.3s;
-    z-index: 2;
+    z-index: 10;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     pointer-events: none;
+    word-break: keep-all;
+    white-space: nowrap;
 }
 #bubble::after {
     content: '';
     position: absolute;
-    bottom: -6px;
+    bottom: -5px;
     left: 50%;
     transform: translateX(-50%);
-    border: 6px solid transparent;
+    border: 5px solid transparent;
     border-top-color: rgba(255,255,255,0.95);
 }
 #bubble.show {
@@ -65,25 +68,25 @@ html, body {
 </div>
 <script>
 var PET = {
-    // 状态配置 - 动画文件 + 气泡文字
     states: {
-        idle:       { file: 'clawd-idle-look.svg',      text: '🦀 嗯～' },
-        thinking:   { file: 'clawd-working-thinking.svg', text: '💭 让我想想...' },
-        working:    { file: 'clawd-typing.gif',          text: '⌨️ 工作中...' },
-        typing:     { file: 'clawd-typing.gif',          text: '✍️ 打字中...' },
-        sleeping:   { file: 'clawd-sleeping.gif',        text: '💤 晚安~' },
-        celebrate:  { file: 'clawd-juggling.gif',        text: '🎉 完成啦！' },
-        building:   { file: 'clawd-building.gif',        text: '🔧 构建中...' },
-        error:      { file: 'clawd-error.gif',           text: '😤 哎哟！' },
-        reading:    { file: 'clawd-idle-reading.gif',    text: '📖 看看呢...' },
-        happy:      { file: 'clawd-happy.gif',           text: '😊 嘿嘿~' },
-        bubble:     { file: 'clawd-bubble.gif',          text: '🫧 你好呀！' },
-        groove:     { file: 'clawd-headphones-groove.gif',text: '🎵 好听~' },
-        notification: { file: 'clawd-notification.gif',   text: '🔔 有消息！' },
-        attention:  { file: 'clawd-notification.gif',    text: '👀 看我！' },
-        annoyed:    { file: 'clawd-react-annoyed.gif',    text: '😒 哼！' },
-        drag:       { file: 'clawd-idle-look.svg',       text: '🦀 别拽我~' },
-        mini:       { file: 'clawd-mini-idle.gif',        text: '🦀 小小的' },
+        idle:       { file: 'clawd-idle.gif',           text: '🦀' },
+        thinking:   { file: 'clawd-thinking.gif',       text: '💭 想想...' },
+        working:    { file: 'clawd-typing.gif',          text: '⌨️ 工作中' },
+        sleeping:   { file: 'clawd-sleeping.gif',        text: '💤 呼呼~' },
+        celebrate:  { file: 'clawd-juggling.gif',        text: '🎉 完成！' },
+        building:   { file: 'clawd-building.gif',        text: '🔧 构建中' },
+        error:      { file: 'clawd-error.gif',           text: '😱 出错了' },
+        reading:    { file: 'clawd-idle-reading.gif',    text: '📖 看看' },
+        happy:      { file: 'clawd-happy.gif',           text: '😊 嘿嘿' },
+        bubble:     { file: 'clawd-bubble.gif',          text: '🫧 你好' },
+        groove:     { file: 'clawd-headphones-groove.gif',text: '🎵 好听' },
+        notification: { file: 'clawd-notification.gif',   text: '🔔 有新消息' },
+        attention:  { file: 'clawd-notification.gif',    text: '👀 看我' },
+        annoyed:    { file: 'clawd-error.gif',            text: '😤 哼' },
+        juggling:   { file: 'clawd-juggling.gif',        text: '🤹 杂耍' },
+        carrying:   { file: 'clawd-carrying.gif',        text: '📦 搬东西' },
+        conducting: { file: 'clawd-conducting.gif',      text: '🎶 指挥中' },
+        sweeping:   { file: 'clawd-sweeping.gif',        text: '🧹 打扫' },
     },
     currentState: 'idle',
     currentFile: null,
@@ -96,24 +99,24 @@ var PET = {
 
     load: function(state) {
         var s = this.states[state] || this.states.idle;
-        if (s.file === this.currentFile) return;
+        if (s.file === this.currentFile && state === this.currentState) return;
         this.currentFile = s.file;
         this.currentState = state;
 
         var container = document.getElementById('pet');
-        var img = document.createElement('img');
-        img.src = s.file;
-        img.alt = state;
-        img.style.width = '90%';
-        img.style.height = '90%';
-        img.style.objectFit = 'contain';
-        
-        // 移除旧图片
         var oldImg = container.querySelector('img');
-        if (oldImg) container.removeChild(oldImg);
-        container.insertBefore(img, container.firstChild);
-
-        // 显示气泡文字
+        if (oldImg) {
+            oldImg.src = s.file;
+            oldImg.alt = state;
+        } else {
+            var img = document.createElement('img');
+            img.src = s.file;
+            img.alt = state;
+            img.style.width = '90%';
+            img.style.height = '90%';
+            img.style.objectFit = 'contain';
+            container.insertBefore(img, container.firstChild);
+        }
         this.showBubble(s.text);
     },
 
@@ -125,36 +128,32 @@ var PET = {
         if (this.textTimer) clearTimeout(this.textTimer);
         this.textTimer = setTimeout(function() {
             bubble.classList.remove('show');
-        }, 2500);
+        }, 2000);
     },
 
     setState: function(state) {
         this.load(state);
     },
 
-    // 交互反馈
     onTap: function() {
-        var msgs = ['😊 嘿嘿~', '🦀 戳我干嘛~', '👋 你好呀！', '🥰 喜欢~', '😄 嘻嘻'];
-        var msg = msgs[Math.floor(Math.random() * msgs.length)];
-        this.showBubble(msg);
+        var msgs = ['😊 嘿嘿', '🦀 戳我干嘛', '👋 你好', '🥰 喜欢', '😄 嘻嘻', '🦀 嗯？'];
+        this.showBubble(msgs[Math.floor(Math.random() * msgs.length)]);
         this.load('happy');
         var self = this;
         setTimeout(function() { self.load(self.currentState); }, 1200);
     },
 
     onDoubleTap: function() {
-        var msgs = ['🎉 好开心！', '✨ 双倍快乐！', '🦀🦀 两只螃蟹~', '💕 爱你！'];
-        var msg = msgs[Math.floor(Math.random() * msgs.length)];
-        this.showBubble(msg);
+        var msgs = ['🎉 好开心', '✨ 双倍快乐', '💕 爱你', '🦀🦀 嘻嘻'];
+        this.showBubble(msgs[Math.floor(Math.random() * msgs.length)]);
         this.load('juggling');
         var self = this;
         setTimeout(function() { self.load(self.currentState); }, 1500);
     },
 
     onLongPress: function() {
-        var msgs = ['😤 哎哟疼！', '😒 哼！', '🦀 生气了！', '💢 别这样~'];
-        var msg = msgs[Math.floor(Math.random() * msgs.length)];
-        this.showBubble(msg);
+        var msgs = ['😤 哎哟', '😒 哼', '💢 别这样', '🦀 疼！'];
+        this.showBubble(msgs[Math.floor(Math.random() * msgs.length)]);
         this.load('annoyed');
         var self = this;
         setTimeout(function() { self.load(self.currentState); }, 1000);
