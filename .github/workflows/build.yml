@@ -17,18 +17,39 @@ jobs:
           java-version: 17
           distribution: temurin
 
-      - name: Setup Android SDK
-        uses: malinskiy/action-android-sdk@v1
-        with:
-          sdk: "34"
-          build-tools: "34.0.0"
+      - name: Check environment
+        run: |
+          echo "JAVA_HOME: $JAVA_HOME"
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+          which java
+          java -version 2>&1
+          # Check for SDK
+          ls /usr/local/lib/android/sdk/ 2>/dev/null || echo "No SDK at /usr/local/lib/android/sdk"
+          ls $ANDROID_HOME/ 2>/dev/null || echo "No ANDROID_HOME"
+          # Check for cmdline-tools
+          find / -name "sdkmanager" -type f 2>/dev/null | head -3
+
+      - name: Install Android SDK
+        run: |
+          # Download cmdline-tools
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd $HOME/android-sdk/cmdline-tools
+          curl -sL -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q tools.zip
+          mv cmdline-tools latest 2>/dev/null || true
+          echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" 2>&1 | tail -5
 
       - name: Build APK
         run: |
           chmod +x gradlew
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tail -50
+          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tail -60
 
       - name: Upload APK
         if: success()
