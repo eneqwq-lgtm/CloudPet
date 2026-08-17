@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 云朵身体 -->
+    <path
+        android:fillColor="#8B7FD4"
+        android:pathData="M30,62 
+            a16,16 0 0,1 0,-32 
+            a11,11 0 0,1 21,-6 
+            a14,14 0 0,1 26,-4 
+            a15,15 0 0,1 27,12 
+            a11,11 0 0,1 -2,22 
+            Z" />
+    <!-- 白肚皮 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,62 
+            a11,11 0 0,1 0,-22 
+            a7,7 0 0,1 14,-4 
+            a10,10 0 0,1 18,-3 
+            a10,10 0 0,1 18,8 
+            a8,8 0 0,1 -1,15 
+            Z" />
+    <!-- 左眼(螺旋) -->
+    <path
+        android:fillColor="#2D2B4A"
+        android:pathData="M45,52 
+            m0,-5 
+            a5,5 0 1,1 0,10 
+            a5,5 0 1,1 0,-10 
+            m0,6 
+            a1,1 0 1,0 0,2 
+            a1,1 0 1,0 0,-2" />
+    <!-- 右眼(螺旋) -->
+    <path
+        android:fillColor="#2D2B4A"
+        android:pathData="M63,52 
+            m0,-5 
+            a5,5 0 1,1 0,10 
+            a5,5 0 1,1 0,-10 
+            m0,6 
+            a1,1 0 1,0 0,2 
+            a1,1 0 1,0 0,-2" />
+    <!-- 红嘴傻笑 -->
+    <path
+        android:fillColor="#FF5A5A"
+        android:pathData="M52,58 
+            a2,2 0 0,1 4,0 
+            a2,2 0 0,1 -4,0 
+            Z" />
+</vector>
