@@ -13,12 +13,10 @@ html, body {
 #pet {
     width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
-    transition: transform 0.2s;
 }
 #pet img {
     width: 100%; height: 100%;
     object-fit: contain;
-    transition: opacity 0.3s;
 }
 </style>
 </head>
@@ -26,78 +24,58 @@ html, body {
 <div id="pet"></div>
 <script>
 const PET = {
-    // 状态→SVG映射
-    svgs: {
-        idle: 'cloudling-idle.svg',
-        thinking: 'cloudling-thinking.svg',
-        working: 'cloudling-typing.svg',
-        sleeping: 'cloudling-sleeping.svg',
-        celebrate: 'cloudling-juggling.svg',
-        speaking: 'cloudling-attention.svg',
-        error: 'cloudling-error.svg',
-        building: 'cloudling-building.svg',
-        reading: 'cloudling-idle-reading.svg',
-        dozing: 'cloudling-dozing.svg',
-        carrying: 'cloudling-carrying.svg',
-        conducting: 'cloudling-conducting.svg',
-        notification: 'cloudling-notification.svg',
+    states: {
+        idle:       { svg: 'clawd-idle-look.svg',      gif: 'clawd-idle.gif' },
+        thinking:   { svg: 'clawd-working-thinking.svg', gif: 'clawd-thinking.gif' },
+        working:    { svg: 'clawd-working-typing.svg',   gif: 'clawd-typing.gif' },
+        sleeping:   { svg: 'clawd-idle-reading.svg',    gif: 'clawd-sleeping.gif' },
+        celebrate:  { svg: 'clawd-working-juggling.svg', gif: 'clawd-juggling.gif' },
+        building:   { svg: 'clawd-working-building.svg', gif: 'clawd-building.gif' },
+        error:      { svg: 'clawd-react-annoyed.svg',   gif: 'clawd-error.gif' },
+        reading:    { svg: 'clawd-idle-reading.svg',    gif: 'clawd-idle-reading.gif' },
+        happy:      { svg: 'clawd-react-annoyed.svg',   gif: 'clawd-happy.gif' },
+        bubble:     { svg: 'clawd-idle-bubble.svg',     gif: 'clawd-bubble.gif' },
+        groove:     { svg: 'clawd-headphones-groove.svg',gif: 'clawd-headphones-groove.gif' },
+        notification: { svg: 'clawd-idle-bubble.svg',   gif: 'clawd-notification.gif' },
     },
     currentState: 'idle',
-    currentSvg: null,
+    useGif: true,
 
     init() {
-        this.loadSvg('idle');
-        // 监听来自 Android 的状态更新
+        this.load('idle');
         window.petEngine = this;
     },
 
-    loadSvg(state) {
-        const svgName = this.svgs[state] || this.svgs.idle;
-        if (svgName === this.currentSvg) return;
-        this.currentSvg = svgName;
+    load(state) {
+        const assets = this.states[state] || this.states.idle;
         this.currentState = state;
-
         const container = document.getElementById('pet');
-        // 使用内联SVG (从assets加载)
-        fetch(svgName)
-            .then(r => r.text())
-            .then(svg => {
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = svg;
-                const svgEl = wrapper.querySelector('svg');
-                if (svgEl) {
-                    svgEl.style.width = '100%';
-                    svgEl.style.height = '100%';
-                    container.innerHTML = '';
-                    container.appendChild(svgEl);
-                }
-            })
-            .catch(() => {
-                container.innerHTML = '<div style="font-size:60px;text-align:center;">☁️</div>';
-            });
+        const file = this.useGif ? assets.gif : assets.svg;
+        
+        const img = document.createElement('img');
+        img.src = file;
+        img.alt = state;
+        img.style.width = '100%';
+        img.style.height = '100%';
+        container.innerHTML = '';
+        container.appendChild(img);
     },
 
-    setState(state) {
-        this.loadSvg(state);
-    },
+    setState(state) { this.load(state); },
 
-    // 交互反馈
     onTap() {
-        this.loadSvg('attention');
-        setTimeout(() => this.loadSvg(this.currentState), 1000);
+        this.load('bubble');
+        setTimeout(() => this.load(this.currentState), 1000);
     },
-
     onDoubleTap() {
-        this.loadSvg('juggling');
-        setTimeout(() => this.loadSvg(this.currentState), 1500);
+        this.load('happy');
+        setTimeout(() => this.load(this.currentState), 1500);
     },
-
     onLongPress() {
-        this.loadSvg('error');
-        setTimeout(() => this.loadSvg(this.currentState), 800);
+        this.load('error');
+        setTimeout(() => this.load(this.currentState), 800);
     }
 };
-
 PET.init();
 </script>
 </body>

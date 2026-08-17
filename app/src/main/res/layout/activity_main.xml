@@ -6,15 +6,15 @@
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="☁️" android:textSize="80dp" android:layout_marginBottom="16dp" />
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="云宝" android:textSize="28dp" android:textColor="#e0e0e0"
+        android:text="Clawd" android:textSize="28dp" android:textColor="#e0e0e0"
         android:layout_marginBottom="8dp" />
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="你的 AI 桌宠" android:textSize="14dp" android:textColor="#888"
         android:layout_marginBottom="48dp" />
     <Button android:id="@+id/btn_start" android:layout_width="match_parent"
-        android:layout_height="56dp" android:text="召唤云宝" android:textSize="16dp"
+        android:layout_height="56dp" android:text="召唤Clawd" android:textSize="16dp"
         android:backgroundTint="#4a6cf7" android:layout_marginBottom="16dp" />
     <Button android:id="@+id/btn_stop" android:layout_width="match_parent"
-        android:layout_height="56dp" android:text="让云宝休息" android:textSize="16dp"
+        android:layout_height="56dp" android:text="让Clawd休息" android:textSize="16dp"
         android:backgroundTint="#6c757d" />
 </LinearLayout>
