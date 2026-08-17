@@ -4,9 +4,11 @@ import android.app.*
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
 import android.view.*
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
@@ -148,19 +150,41 @@ class OverlayService : Service() {
     }
 
     private fun getForegroundApp(): String? {
+        // 方法1: 使用 UsageStatsManager (需要权限)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                val time = System.currentTimeMillis()
+                val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 2000, time)
+                if (stats != null && stats.isNotEmpty()) {
+                    val sorted = stats.sortedByDescending { it.lastTimeUsed }
+                    return sorted[0].packageName
+                }
+            } catch (_: Exception) {}
+        }
+        // 方法2: 使用 RunningAppProcessInfo (不需要权限，Android 11+ 受限)
         try {
-            val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-            val time = System.currentTimeMillis()
-            val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 5000, time)
-            if (stats != null) {
-                val sortedStats = stats.sortedByDescending { it.lastTimeUsed }
-                if (sortedStats.isNotEmpty()) {
-                    return sortedStats[0].packageName
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
+                val ranks = am.runningAppProcesses
+                if (ranks != null && ranks.isNotEmpty()) {
+                    for (info in ranks) {
+                        if (info.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
+                            return info.processName.split(":").first()
+                        }
+                    }
+                }
+            } else {
+                val processes = am.runningAppProcesses
+                if (processes != null && processes.isNotEmpty()) {
+                    for (p in processes) {
+                        if (p.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
+                            return p.pkgList.firstOrNull()
+                        }
+                    }
                 }
             }
-        } catch (e: Exception) {
-            // 无权限时静默忽略
-        }
+        } catch (_: Exception) {}
         return null
     }
 
@@ -190,11 +214,17 @@ class OverlayService : Service() {
 
     private fun checkEdgePosition() {
         val x = params?.x ?: 0
-        val edgeThreshold = dpToPx(10)
-        val shouldPeek = x < edgeThreshold || x > screenWidth - dpToPx(PET_SIZE_DP) - edgeThreshold
+        val petW = dpToPx(PET_SIZE_DP)
+        val edgeThreshold = dpToPx(30)
+        val atLeftEdge = x < edgeThreshold
+        val atRightEdge = x > screenWidth - petW - edgeThreshold
+        val shouldPeek = atLeftEdge || atRightEdge
 
         if (shouldPeek && !isMiniPeek) {
             isMiniPeek = true
+            // 吸附到边缘
+            params?.x = if (atLeftEdge) 0 else screenWidth - petW
+            windowManager?.updateViewLayout(overlayView, params)
             pushState("peek", "🦀 偷偷看")
         } else if (!shouldPeek && isMiniPeek) {
             isMiniPeek = false
@@ -250,8 +280,17 @@ class OverlayService : Service() {
                     val dy = (event.rawY - initialTouchY).toInt()
                     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
                         hasMoved = true
-                        params?.x = initialX + dx
-                        params?.y = initialY + dy
+                        // 计算新位置并限制在屏幕内
+                        var newX = initialX + dx
+                        var newY = initialY + dy
+                        val petW = dpToPx(PET_SIZE_DP)
+                        val petH = dpToPx(PET_HEIGHT_DP)
+                        // 限制左右边界
+                        newX = newX.coerceIn(-dpToPx(30), screenWidth - petW + dpToPx(30))
+                        // 限制上下边界
+                        newY = newY.coerceIn(-dpToPx(30), resources.displayMetrics.heightPixels - petH + dpToPx(30))
+                        params?.x = newX
+                        params?.y = newY
                         windowManager?.updateViewLayout(overlayView, params)
                     }
                     true
