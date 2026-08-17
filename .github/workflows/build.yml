@@ -18,32 +18,16 @@ jobs:
           distribution: temurin
 
       - name: Setup Android SDK
-        run: |
-          mkdir -p $HOME/android-sdk/cmdline-tools
-          cd $HOME/android-sdk/cmdline-tools
-          curl -sL -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q tools.zip
-          mv cmdline-tools latest 2>/dev/null || true
-          echo "sdk.dir=$HOME/android-sdk" > $GITHUB_WORKSPACE/local.properties
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
-          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" 2>&1 | tail -3
+        uses: android-actions/setup-android@v3
 
       - name: Build APK
         run: |
           chmod +x gradlew
-          export ANDROID_HOME=$HOME/android-sdk
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          ./gradlew assembleDebug --no-daemon
+          ls $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms"
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tail -40
 
-      - name: Upload APK to release
-        uses: softprops/action-gh-release@v2
-        if: success()
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: build-${{ github.run_number }}
-          name: "云宝 CloudPet v1.0.${{ github.run_number }}"
-          body: "☁️ 自动构建 APK"
-          files: |
-            app/build/outputs/apk/debug/*.apk
-          make_latest: true
+          name: CloudPet-debug
+          path: "**/outputs/apk/debug/*.apk"
