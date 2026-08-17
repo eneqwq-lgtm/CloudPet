@@ -35,16 +35,15 @@ jobs:
           chmod +x gradlew
           export ANDROID_HOME=$HOME/android-sdk
           export ANDROID_SDK_ROOT=$HOME/android-sdk
-          ./gradlew assembleDebug --no-daemon 2>&1 | tail -20
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Find APK
-        run: |
-          echo "查找 APK..."
-          find . -name "*.apk" -type f
-          find . -path "*/outputs/*" -type d || true
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Upload APK to release
+        uses: softprops/action-gh-release@v2
+        if: success()
         with:
-          name: CloudPet-debug
-          path: ./app/build/outputs/apk/debug/*.apk
+          tag_name: build-${{ github.run_number }}
+          name: "云宝 CloudPet v1.0.${{ github.run_number }}"
+          body: "☁️ 自动构建 APK"
+          files: |
+            app/build/outputs/apk/debug/*.apk
+          make_latest: true
