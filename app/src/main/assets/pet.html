@@ -18,44 +18,32 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: visible;
 }
 #pet img {
-    width: 90%; height: 90%;
+    width: 85%; height: 85%;
     object-fit: contain;
     transition: opacity 0.3s;
     z-index: 1;
 }
 #bubble {
     position: absolute;
-    bottom: 105%;
+    top: 8%;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(255,255,255,0.95);
+    background: rgba(255,255,255,0.92);
     color: #333;
-    padding: 5px 10px;
-    border-radius: 10px;
-    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 8px;
+    font-size: 10px;
     font-family: sans-serif;
-    max-width: 150px;
-    width: max-content;
+    max-width: 130px;
     text-align: center;
     opacity: 0;
-    transition: opacity 0.3s;
+    transition: opacity 0.25s;
     z-index: 10;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
     pointer-events: none;
-    word-break: keep-all;
-    white-space: nowrap;
-}
-#bubble::after {
-    content: '';
-    position: absolute;
-    bottom: -5px;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 5px solid transparent;
-    border-top-color: rgba(255,255,255,0.95);
+    line-height: 1.3;
 }
 #bubble.show {
     opacity: 1;
@@ -70,23 +58,23 @@ html, body {
 var PET = {
     states: {
         idle:       { file: 'clawd-idle.gif',           text: '🦀' },
-        thinking:   { file: 'clawd-thinking.gif',       text: '💭 想想...' },
-        working:    { file: 'clawd-typing.gif',          text: '⌨️ 工作中' },
-        sleeping:   { file: 'clawd-sleeping.gif',        text: '💤 呼呼~' },
-        celebrate:  { file: 'clawd-juggling.gif',        text: '🎉 完成！' },
-        building:   { file: 'clawd-building.gif',        text: '🔧 构建中' },
-        error:      { file: 'clawd-error.gif',           text: '😱 出错了' },
-        reading:    { file: 'clawd-idle-reading.gif',    text: '📖 看看' },
-        happy:      { file: 'clawd-happy.gif',           text: '😊 嘿嘿' },
-        bubble:     { file: 'clawd-bubble.gif',          text: '🫧 你好' },
-        groove:     { file: 'clawd-headphones-groove.gif',text: '🎵 好听' },
-        notification: { file: 'clawd-notification.gif',   text: '🔔 有新消息' },
-        attention:  { file: 'clawd-notification.gif',    text: '👀 看我' },
-        annoyed:    { file: 'clawd-error.gif',            text: '😤 哼' },
-        juggling:   { file: 'clawd-juggling.gif',        text: '🤹 杂耍' },
-        carrying:   { file: 'clawd-carrying.gif',        text: '📦 搬东西' },
-        conducting: { file: 'clawd-conducting.gif',      text: '🎶 指挥中' },
-        sweeping:   { file: 'clawd-sweeping.gif',        text: '🧹 打扫' },
+        thinking:   { file: 'clawd-thinking.gif',       text: '💭' },
+        working:    { file: 'clawd-typing.gif',          text: '⌨️' },
+        sleeping:   { file: 'clawd-sleeping.gif',        text: '💤' },
+        celebrate:  { file: 'clawd-juggling.gif',        text: '🎉' },
+        building:   { file: 'clawd-building.gif',        text: '🔧' },
+        error:      { file: 'clawd-error.gif',           text: '😱' },
+        reading:    { file: 'clawd-idle-reading.gif',    text: '📖' },
+        happy:      { file: 'clawd-happy.gif',           text: '😊' },
+        bubble:     { file: 'clawd-bubble.gif',          text: '🫧' },
+        groove:     { file: 'clawd-headphones-groove.gif',text: '🎵' },
+        notification: { file: 'clawd-notification.gif',   text: '🔔' },
+        attention:  { file: 'clawd-notification.gif',    text: '👀' },
+        annoyed:    { file: 'clawd-error.gif',            text: '😤' },
+        juggling:   { file: 'clawd-juggling.gif',        text: '🤹' },
+        carrying:   { file: 'clawd-carrying.gif',        text: '📦' },
+        conducting: { file: 'clawd-conducting.gif',      text: '🎶' },
+        sweeping:   { file: 'clawd-sweeping.gif',        text: '🧹' },
     },
     currentState: 'idle',
     currentFile: null,
@@ -99,21 +87,19 @@ var PET = {
 
     load: function(state) {
         var s = this.states[state] || this.states.idle;
-        if (s.file === this.currentFile && state === this.currentState) return;
         this.currentFile = s.file;
         this.currentState = state;
-
         var container = document.getElementById('pet');
-        var oldImg = container.querySelector('img');
-        if (oldImg) {
-            oldImg.src = s.file;
-            oldImg.alt = state;
-        } else {
-            var img = document.createElement('img');
+        var img = container.querySelector('img');
+        if (img) {
             img.src = s.file;
             img.alt = state;
-            img.style.width = '90%';
-            img.style.height = '90%';
+        } else {
+            img = document.createElement('img');
+            img.src = s.file;
+            img.alt = state;
+            img.style.width = '85%';
+            img.style.height = '85%';
             img.style.objectFit = 'contain';
             container.insertBefore(img, container.firstChild);
         }
@@ -131,12 +117,10 @@ var PET = {
         }, 2000);
     },
 
-    setState: function(state) {
-        this.load(state);
-    },
+    setState: function(state) { this.load(state); },
 
     onTap: function() {
-        var msgs = ['😊 嘿嘿', '🦀 戳我干嘛', '👋 你好', '🥰 喜欢', '😄 嘻嘻', '🦀 嗯？'];
+        var msgs = ['😊', '🦀', '👋', '🥰', '😄'];
         this.showBubble(msgs[Math.floor(Math.random() * msgs.length)]);
         this.load('happy');
         var self = this;
@@ -144,7 +128,7 @@ var PET = {
     },
 
     onDoubleTap: function() {
-        var msgs = ['🎉 好开心', '✨ 双倍快乐', '💕 爱你', '🦀🦀 嘻嘻'];
+        var msgs = ['🎉', '✨', '💕', '🦀🦀'];
         this.showBubble(msgs[Math.floor(Math.random() * msgs.length)]);
         this.load('juggling');
         var self = this;
@@ -152,14 +136,13 @@ var PET = {
     },
 
     onLongPress: function() {
-        var msgs = ['😤 哎哟', '😒 哼', '💢 别这样', '🦀 疼！'];
+        var msgs = ['😤', '😒', '💢', '🦀'];
         this.showBubble(msgs[Math.floor(Math.random() * msgs.length)]);
         this.load('annoyed');
         var self = this;
         setTimeout(function() { self.load(self.currentState); }, 1000);
     }
 };
-
 PET.init();
 </script>
 </body>
