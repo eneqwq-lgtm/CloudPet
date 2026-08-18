@@ -9,7 +9,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * 云宝的“大脑”：根据当前真实状态，用大模型现写气泡。
+ * 小克的“大脑”：根据当前真实状态，用大模型现写气泡。
  * 直接走 OpenAI 兼容的 /v1/chat/completions（个人私有桌宠，密钥内置可接受）。
  * 支持一次生成 1~2 句（进 App 要两句：第一句回应当前场景，第二句随性补充）。
  */
