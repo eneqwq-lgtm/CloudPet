@@ -111,13 +111,13 @@ class OverlayService : Service() {
     private var lastBubbleInAppAt = 0L
     private var generationId = 0L
     private val recentBubbles = ArrayDeque<String>()  // 最近说过的气泡，防 AI 复读
-    // 用户动作追踪（30 分钟无动作 → 碎碎念）
+    // 用户动作追踪（20 分钟无动作 → 碎碎念）
     private var lastUserActionAt = System.currentTimeMillis()
     private var lastUserActionSig = ""
     private var lastMurmurAt = 0L
     private var lastScreenOn = true
 
-    // 本地碎碎念库：AI 掉线/超时时的兜底（60 分钟才一条，什么内容都可以）
+    // 本地碎碎念库：AI 掉线/超时时的兜底（20 分钟才一条，什么内容都可以）
     private val murmurs = listOf(
         "呼~ 好安静呀", "小克在数云朵，1、2、3", "记得喝水哦~", "屏幕盯久了，眨眨眼吧",
         "伸个懒腰~ 舒服", "今天天气好像不错", "想听你讲个故事", "小克打了个哈欠~",
@@ -219,7 +219,7 @@ class OverlayService : Service() {
                 maybeReactToWindowChange()
                 maybeReactToTrack()
 
-                // 3.7 30 分钟没有任何动作 → 自己碎碎念一句
+                // 3.7 20 分钟没有任何动作 → 自己碎碎念一句
                 maybeMurmur()
 
                 // 4. 边缘保持（最低优先级）：不主动吸附，只在异常状态下纠正
@@ -730,24 +730,24 @@ class OverlayService : Service() {
         else -> "☁️ 小克看着呢~"
     }
 
-    /** 用户有动作了：刷新“最后动作时间”，重置 30 分钟碎碎念计时。 */
+    /** 用户有动作了：刷新“最后动作时间”，重置 20 分钟碎碎念计时。 */
     private fun refreshUserAction() {
         lastUserActionAt = System.currentTimeMillis()
     }
 
-    /** 30 分钟没有任何操作 → 自己碎碎念一句（AI 优先，失败用本地库）。改成 60 分钟一次，避免太频繁。 */
+    /** 20 分钟没有任何操作 → 自己碎碎念一句（AI 优先，失败用本地库）。 */
     private fun maybeMurmur() {
         if (aiGenerating) return
         val now = System.currentTimeMillis()
-        if (now - lastUserActionAt < 60 * 60 * 1000L) return
-        if (now - lastMurmurAt < 60 * 60 * 1000L) return   // 防连发
+        if (now - lastUserActionAt < 20 * 60 * 1000L) return
+        if (now - lastMurmurAt < 20 * 60 * 1000L) return   // 防连发
         if (now - lastBubbleShownAt < 3000 && lastBubbleShownAt > 0) return
         lastMurmurAt = now
         aiGenerating = true
         val currentGen = generationId
         val phase = timePhase()
         ai.generate(
-            "主人已经一个多小时没有操作设备了，屏幕还亮着，现在是$phase。你现在可以随意碎碎念一句，自言自语，什么内容都可以，一句话，不超过15个字，可带1个emoji。",
+            "主人已经快二十分钟没有操作设备了，屏幕还亮着，现在是$phase。你现在可以随意碎碎念一句，自言自语，什么内容都可以，一句话，不超过15个字，可带1个emoji。",
             recentBubbles.toList(), 1
         ) { result ->
             if (currentGen != generationId) return@generate
