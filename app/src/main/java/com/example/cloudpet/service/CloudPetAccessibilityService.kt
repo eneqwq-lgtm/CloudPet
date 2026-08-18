@@ -5,7 +5,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 /**
- * 云宝的“眼睛”：reads window content and exposes screen text snapshot.
+ * 小克的“眼睛”：reads window content and exposes screen text snapshot.
  * 无障碍服务，在系统设置里手动开启。OverlayService 每轮询读取这里的屏幕文字，喂给 AI。
  * 不做任何点击/输入，只读文字。
  */

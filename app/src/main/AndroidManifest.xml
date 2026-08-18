@@ -14,7 +14,7 @@
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="云宝"
+        android:label="小克"
         android:theme="@style/Theme.CloudPet"
         android:supportsRtl="true">
 

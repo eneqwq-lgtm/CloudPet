@@ -49,8 +49,9 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        loadAppLabels()   // 枚举设备上所有已安装 App，未知 App 也能知道它叫什么
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("☁️ 云宝正在待机~"))
+        startForeground(NOTIFICATION_ID, buildNotification("☁️ 小克正在待机~"))
         setupOverlay()
         startPolling()
         registerScreenshotObserver()
@@ -118,14 +119,14 @@ class OverlayService : Service() {
 
     // 本地碎碎念库：AI 掉线/超时时的兜底（30 分钟才一条，什么内容都可以）
     private val murmurs = listOf(
-        "呼~ 好安静呀", "云宝在数云朵，1、2、3", "记得喝水哦~", "屏幕盯久了，眨眨眼吧",
-        "伸个懒腰~ 舒服", "今天天气好像不错", "想听你讲个故事", "云宝打了个哈欠~",
-        "安安静静也挺好", "要不要休息一下?", "月亮出来了吗?", "云宝在看云发呆~",
+        "呼~ 好安静呀", "小克在数云朵，1、2、3", "记得喝水哦~", "屏幕盯久了，眨眨眼吧",
+        "伸个懒腰~ 舒服", "今天天气好像不错", "想听你讲个故事", "小克打了个哈欠~",
+        "安安静静也挺好", "要不要休息一下?", "月亮出来了吗?", "小克在看云发呆~",
         "悄悄挪了挪位置", "咕噜噜~ 肚子叫了", "你在忙吗?我在呢", "这里的风景真好",
-        "发呆也是一种享受~", "云宝偷偷笑了", "晚风轻飘飘的", "数完星星数你",
-        "哼着歌等主人", "云朵软软的，想躺上去", "今天也要开心呀", "云宝的壳壳亮晶晶~",
-        "唔……今天做什么好呢", "咕嘟咕嘟，云宝吐泡泡", "世界这么安静，真好", "要是有片海就好了",
-        "云宝的钳子有点痒~", "猜猜我在想什么?"
+        "发呆也是一种享受~", "小克偷偷笑了", "晚风轻飘飘的", "数完星星数你",
+        "哼着歌等主人", "云朵软软的，想躺上去", "今天也要开心呀", "小克的壳壳亮晶晶~",
+        "唔……今天做什么好呢", "咕嘟咕嘟，小克吐泡泡", "世界这么安静，真好", "要是有片海就好了",
+        "小克的钳子有点痒~", "猜猜我在想什么?"
     )
 
     private fun startPolling() {
@@ -285,6 +286,33 @@ class OverlayService : Service() {
         } catch (_: Exception) {}
     }
 
+    // === App 检测 ===
+    /** 设备上所有已安装 App 的 包名→显示名 缓存（启动时枚举一次，未知 App 也能识别） */
+    private var appLabels: Map<String, String> = emptyMap()
+
+    private fun loadAppLabels() {
+        appLabels = try {
+            val pm = packageManager
+            pm.getInstalledApplications(0)
+                .associate { it.packageName to (pm.getApplicationLabel(it)?.toString() ?: "") }
+                .filterValues { it.isNotBlank() }
+        } catch (_: Exception) { emptyMap() }
+    }
+
+    /** 取 App 的显示名（如「哔哩哔哩」「王者荣耀」），拿不到或等于包名则 null。 */
+    private fun appLabel(pkg: String): String? {
+        val label = appLabels[pkg] ?: return null
+        val clean = label.replace(Regex("\\s+"), " ").trim()
+        if (clean.isBlank() || clean == pkg) return null
+        return if (clean.length > 12) clean.take(12) + "…" else clean
+    }
+
+    /** 是否为系统预装 App（后台组件/系统界面 → 安静待机，不弹气泡）。 */
+    private fun isSystemApp(pkg: String): Boolean = try {
+        val ai = packageManager.getApplicationInfo(pkg, 0)
+        (ai.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+    } catch (_: Exception) { true }   // 拿不到信息的按系统处理，静默
+
     private fun hasUsageStatsPermission(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return false
         return try {
@@ -356,8 +384,13 @@ class OverlayService : Service() {
         }
         val info = appInfo(pkg)
         if (info != null) {
+            // 结合 App 真实显示名，让气泡更有针对性（如「微信(聊天)」「哔哩哔哩(刷视频)」）
+            val label = appLabel(pkg)
+            val activity = if (label != null && !label.contains(info.second.take(3))) {
+                "$label（${info.second}）"
+            } else info.second
             // 每个 App 进来自动弹 2 条气泡：第一句回应当前场景，第二句随性补充（队列顺序播放）
-            noteState(info.first, info.second, lines = 2, fromAppSwitch = true)
+            noteState(info.first, activity, lines = 2, fromAppSwitch = true)
             return
         }
         if (currentAppIsLauncher(pkg)) {
@@ -365,7 +398,16 @@ class OverlayService : Service() {
             if (isMiniPeek) switchAnim("peek")
             else switchAnim("idle")
         } else {
-            noteState("thinking", "在用「${pkg.substringAfterLast('.')}」", fromAppSwitch = true)
+            // 未知 App（不在内置分类表里）：用 PackageManager 拿真实应用名，
+            // 保证设备上每个 App 打开都有自己独特的气泡
+            val label = appLabel(pkg)
+            if (label != null && !isSystemApp(pkg)) {
+                noteState("thinking", "用「$label」", lines = 2, fromAppSwitch = true)
+            } else {
+                // 系统组件/后台服务 → 安静待机，不打扰
+                if (isMiniPeek) switchAnim("peek")
+                else switchAnim("idle")
+            }
         }
     }
 
@@ -524,6 +566,26 @@ class OverlayService : Service() {
             return "debugger" to "在用 AI 工具"
         }
 
+        // ===== AOSP 原生系统应用（用户会主动打开，给气泡；真正的后台组件见下一块）=====
+        if (pkg.startsWith("android.") || pkg.startsWith("com.android.")) {
+            return when {
+                pkg.contains("settings") -> "debugger" to "在系统设置"
+                pkg.contains("documentsui") || pkg.contains("externalstorage") -> "debugger" to "在文件管理"
+                pkg.contains("dialer") || pkg.contains("incallui") || pkg.contains("com.android.phone") -> "bubble" to "打电话"
+                pkg.contains("mms") || pkg.contains("messaging") -> "bubble" to "看短信"
+                pkg.contains("contacts") -> "bubble" to "看通讯录"
+                pkg.contains("gallery") || pkg.contains("photos") -> "reading" to "看照片"
+                pkg.contains("camera") -> "reading" to "拍照"
+                pkg.contains("calculator") -> "debugger" to "算东西"
+                pkg.contains("deskclock") || pkg.contains("clock") -> "reading" to "看时间"
+                pkg.contains("calendar") -> "reading" to "看日历"
+                pkg.contains("email") || pkg.contains("exchange") -> "bubble" to "看邮件"
+                pkg.contains("vending") || pkg.contains("playstore") -> "building" to "逛应用商店"
+                pkg.contains("chrome") -> "debugger" to "用浏览器"
+                else -> null
+            }
+        }
+
         // ===== 系统组件 / 后台服务 ===== (忽略，不弹气泡)
         if (pkg.startsWith("android.") || pkg.startsWith("com.android.") || pkg.contains("android.system") || pkg.contains("android.auto") || pkg.contains("qualcomm") || pkg.contains("qti") || pkg.contains("snapdragon") || pkg.contains("samsung") || pkg.contains("oneplus") || pkg.contains("oppo") || pkg.contains("vivo") || pkg.contains("realme") || pkg.contains("huawei") || pkg.contains("honor") || pkg.contains("pixel") || pkg.contains("motorola") || pkg.contains("sony") || pkg.contains("lg") || pkg.contains("nokia") || pkg.contains("lenovo") || pkg.contains("asus") || pkg.contains("mediatek") || pkg.contains("mtk") || pkg.contains("wlan") || pkg.contains("bluetooth") || pkg.contains("nfc") || pkg.contains("radio") || pkg.contains("telephony") || pkg.contains("phone") || pkg.contains("incall") || pkg.contains("dialer") || pkg.contains("contacts") || pkg.contains("providers") || pkg.contains("print") || pkg.contains("com.android") || pkg.contains("android.ext") || pkg.contains("android.auto") || pkg.contains("fused") || pkg.contains("location") || pkg.contains("keychain") || pkg.contains("certificate") || pkg.contains("permission") || pkg.contains("safety") || pkg.contains("secure") || pkg.contains("root") || pkg.contains("update") || pkg.contains("otg") || pkg.contains("usb") || pkg.contains("com.miui") || pkg.contains("android.") || pkg.contains("com.google.android.gms") || pkg.contains("com.google.android.gsf") || pkg.contains("com.android.systemui") || pkg.contains("com.android.settings") || pkg.contains("com.android.providers") || pkg.contains("com.android.vending") || pkg.contains("com.android.chrome") || pkg.contains("com.android.phone") || pkg.contains("com.android.dialer") || pkg.contains("com.android.mms") || pkg.contains("com.android.contacts") || pkg.contains("com.android.documentsui") || pkg.contains("com.android.externalstorage") || pkg.contains("com.android.packageinstaller") || pkg.contains("com.android.permissioncontroller") || pkg.contains("com.android.onetimeinitializer") || pkg.contains("com.android.cellbroadcast") || pkg.contains("com.android.carrierconfig") || pkg.contains("com.android.carriersettings") || pkg.contains("com.android.emergency") || pkg.contains("com.android.managedprovisioning") || pkg.contains("com.android.networkstack") || pkg.contains("com.android.nfc") || pkg.contains("com.android.se") || pkg.contains("com.android.shell") || pkg.contains("com.android.statementservice") || pkg.contains("com.android.wallpaper") || pkg.contains("com.android.wifi") || pkg.contains("com.android.framework") || pkg.contains("com.android.ons") || pkg.contains("com.android.phyh") || pkg.contains("com.android.bips") || pkg.contains("com.android.soundrecorder") || pkg.contains("com.android.stk") || pkg.contains("com.android.wallpaper") || pkg.contains("com.android.calendar") || pkg.contains("com.android.deskclock") || pkg.contains("com.android.email") || pkg.contains("com.android.exchange") || pkg.contains("com.android.gallery") || pkg.contains("com.android.camera") || pkg.contains("com.android.calculator") || pkg.contains("com.android.quicksearchbox") || pkg.contains("com.android.inputdevices") || pkg.contains("com.android.inputmethod") || pkg.contains("com.android.keyguard") || pkg.contains("com.android.launcher") || pkg.contains("com.android.packageinstaller") || pkg.contains("com.android.phasebeacon") || pkg.contains("com.android.proxyhandler") || pkg.contains("com.android.server") || pkg.contains("com.android.smspush") || pkg.contains("com.android.traceur") || pkg.contains("com.android.voicemail") || pkg.contains("com.android.vpndialogs") || pkg.contains("com.android.certinstaller") || pkg.contains("com.android.dreams") || pkg.contains("com.android.htmlviewer") || pkg.contains("com.android.sharedstoragebackup") || pkg.contains("com.android.webview") || pkg.contains("com.qualcomm") || pkg.contains("com.qti") || pkg.contains("com.mediatek") || pkg.contains("com.svox") || pkg.contains("com.estrongs") || pkg.contains("com.xiaomi") || pkg.contains(":") || pkg.endsWith(".system") || pkg.contains("systemui") || pkg.contains("system") || pkg.contains("process") || pkg.contains("service") || pkg.contains("overlay") || pkg.contains("feedback") || pkg.contains("partner") || pkg.contains("config") || pkg.contains("embryo") || pkg.contains("cnss") || pkg.contains("dpm") || pkg.contains("dpmservice") || pkg.contains("hotword") || pkg.contains("ifaa") || pkg.contains("keystore") || pkg.contains("locale") || pkg.contains("logging") || pkg.contains("mgm") || pkg.contains("mms") || pkg.contains("monitor") || pkg.contains("msa") || pkg.contains("network") || pkg.contains("npe") || pkg.contains("nubia") || pkg.contains("oem") || pkg.contains("pco") || pkg.contains("platform") || pkg.contains("pps") || pkg.contains("preset") || pkg.contains("provision") || pkg.contains("safemode") || pkg.contains("samsung") || pkg.contains("sdp") || pkg.contains("secc") || pkg.contains("sensor") || pkg.contains("sim") || pkg.contains("soter") || pkg.contains("stk") || pkg.contains("storage") || pkg.contains("switch") || pkg.contains("telecom") || pkg.contains("theme") || pkg.contains("touch") || pkg.contains("trace") || pkg.contains("update") || pkg.contains("usb") || pkg.contains("uim") || pkg.contains("wfd") || pkg.contains("wifi") || pkg.contains("wlan") || pkg.contains("xms") || pkg.contains("yg")) {
             return null
@@ -638,7 +700,7 @@ class OverlayService : Service() {
         activity.contains("健康") || activity.contains("运动") -> "🏃 在运动"
         activity.contains("AI") || activity.contains("工具") -> "🤖 在用 AI"
         activity.contains("记事本") || activity.contains("笔记") -> "📝 在记东西"
-        else -> "☁️ 云宝看着呢~"
+        else -> "☁️ 小克看着呢~"
     }
 
     /** 用户有动作了：刷新“最后动作时间”，重置 30 分钟碎碎念计时。 */
@@ -1005,7 +1067,7 @@ class OverlayService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("云宝 Clawd")
+            .setContentTitle("小克 Clawd")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setContentIntent(pendingIntent)

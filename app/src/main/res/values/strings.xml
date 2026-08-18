@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">云宝 Clawd</string>
-    <string name="accessibility_label">云宝读屏</string>
+    <string name="app_name">小克 Clawd</string>
+    <string name="accessibility_label">小克读屏</string>
     <string name="accessibility_desc">让桌宠“看到”你屏幕上的文字和界面，好在你做事情的当下随口点评。开启后它只会读取屏幕可见文字用于生成气泡，不会录音、不上传原始内容以外的东西。</string>
 </resources>

@@ -44,7 +44,7 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btn_stop).setOnClickListener {
             stopService(Intent(this, OverlayService::class.java))
-            Toast.makeText(this, "云宝休息了~", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "小克休息了~", Toast.LENGTH_SHORT).show()
         }
 
         findViewById<Button>(R.id.btn_usage_access).setOnClickListener {
@@ -81,7 +81,7 @@ class MainActivity : AppCompatActivity() {
     private fun requestUsageStatsPermission() {
         val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
         startActivity(intent)
-        Toast.makeText(this, "请找到 ☁️ 云宝 并开启\"使用情况访问\"权限", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "请找到 ☁️ 小克 并开启\"使用情况访问\"权限", Toast.LENGTH_LONG).show()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -94,7 +94,7 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, "还需要\"使用情况访问\"权限才能检测前台 App", Toast.LENGTH_LONG).show()
                 }
             } else {
-                Toast.makeText(this, "需要悬浮窗权限才能显示云宝", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "需要悬浮窗权限才能显示小克", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -133,6 +133,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             startService(intent)
         }
-        Toast.makeText(this, "☁️ 云宝出现啦！", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "☁️ 小克出现啦！", Toast.LENGTH_SHORT).show()
     }
 }
