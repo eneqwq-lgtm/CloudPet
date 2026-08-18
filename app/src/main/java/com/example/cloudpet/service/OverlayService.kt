@@ -4,8 +4,8 @@ import android.app.*
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.PixelFormat
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
@@ -83,6 +83,7 @@ class OverlayService : Service() {
     private var lastForegroundApp = ""
     private var isMiniPeek = false
     private var screenWidth = 0
+    private var lastOnceState = ""
 
     private fun startPolling() {
         screenWidth = resources.displayMetrics.widthPixels
@@ -92,49 +93,73 @@ class OverlayService : Service() {
                 val displayMetrics = resources.displayMetrics
                 screenWidth = displayMetrics.widthPixels
 
-                // 1. 检测键盘状态
+                // 1. 检测键盘状态（最高优先级）
                 val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
                 val kbActive = imm.isAcceptingText
                 if (kbActive != lastKbState) {
                     lastKbState = kbActive
                     if (kbActive) {
+                        isMiniPeek = false  // 键盘打字时退出边缘模式
                         pushState("thinking", "💭 打字中...")
                     } else {
-                        pushState("idle", "🦀")
+                        // 键盘关闭：如果不在 Termux 中则恢复 idle
+                        if (!lastForegroundApp.contains("termux")) {
+                            if (isMiniPeek) {
+                                pushState("peek", "🦀 偷偷看")
+                            } else {
+                                pushState("idle", "🦀")
+                            }
+                        }
                     }
                 }
-
-                // 如果键盘开着，优先显示打字状态，不执行其他检测
+                // 键盘开着时跳过其他检测
                 if (kbActive) {
                     handler.postDelayed(this, 2000)
                     return
                 }
 
-                // 2. 检测充电状态（只触发一次）
-                val intent = registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                // 2. 检测充电状态（只触发一次，once 播放）
+                val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                 val plugged = intent?.getIntExtra("plugged", -1) ?: -1
-                val isCharging = plugged == android.os.BatteryManager.BATTERY_PLUGGED_AC ||
-                                 plugged == android.os.BatteryManager.BATTERY_PLUGGED_USB
+                val isCharging = plugged == BatteryManager.BATTERY_PLUGGED_AC ||
+                                 plugged == BatteryManager.BATTERY_PLUGGED_USB
                 if (isCharging && !lastChargingState) {
                     lastChargingState = true
-                    pushState("error", "🔋 充电中...")
-                    // 2秒后恢复待机
-                    handler.postDelayed({
-                        pushState("idle", "🦀")
-                    }, 2000)
+                    pushStateOnce("error", "🔋 充电中...")
                 } else if (!isCharging) {
                     lastChargingState = false
                 }
 
                 // 3. 检测前台 App
                 val currentApp = getForegroundApp()
-                if (currentApp != null && currentApp != lastForegroundApp) {
-                    lastForegroundApp = currentApp
-                    handleAppSwitch(currentApp)
+                if (currentApp != null) {
+                    if (currentApp != lastForegroundApp) {
+                        // 离开旧 App 时清理
+                        val oldApp = lastForegroundApp
+                        lastForegroundApp = currentApp
+                        handleAppSwitch(currentApp, oldApp)
+                    } else if (currentApp.contains("termux")) {
+                        // 持续在 Termux 中：保持 typing 状态
+                        // 仅当不在边缘模式且不在 once 过渡中时刷新
+                        if (!isMiniPeek && lastOnceState.isEmpty()) {
+                            pushState("typing", "⌨️ Termux 中...")
+                        }
+                    }
+                } else {
+                    // 无法检测前台 App 时，清除记录
+                    if (lastForegroundApp.isNotEmpty()) {
+                        lastForegroundApp = ""
+                        if (!isMiniPeek) {
+                            pushState("idle", "🦀")
+                        }
+                    }
                 }
 
-                // 4. 边缘检测
-                checkEdgePosition()
+                // 4. 边缘检测（最低优先级）
+                // 仅在非特殊状态下执行
+                if (lastOnceState.isEmpty() && !lastForegroundApp.contains("termux")) {
+                    checkEdgePosition()
+                }
 
                 // 5. Supabase 状态同步
                 supabase.fetchPetState { state ->
@@ -152,12 +177,10 @@ class OverlayService : Service() {
 
     private fun getForegroundApp(): String? {
         // 方法1: 使用 UsageStatsManager (需要权限)
-        // 注意: 用户需在 设置 → 应用 → 特殊权限 → 使用情况访问 中开启
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             try {
                 val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
                 val time = System.currentTimeMillis()
-                // 查最近 5 分钟的数据，确保有缓存
                 val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 300_000, time)
                 if (stats != null && stats.isNotEmpty()) {
                     val sorted = stats.sortedByDescending { it.lastTimeUsed }
@@ -169,8 +192,7 @@ class OverlayService : Service() {
                 }
             } catch (_: Exception) {}
         }
-        // 方法2: 使用 dumpsys activity recents (Android 5+ 可靠)
-        // 通过 shell 命令获取当前前台 Activity 的包名
+        // 方法2: dumpsys activity recents
         try {
             val proc = Runtime.getRuntime().exec("dumpsys activity recents 2>/dev/null | grep 'Recent #0' | cut -d' ' -f4 | cut -d'/' -f1")
             val reader = java.io.BufferedReader(java.io.InputStreamReader(proc.inputStream))
@@ -181,7 +203,7 @@ class OverlayService : Service() {
                 return pkg
             }
         } catch (_: Exception) {}
-        // 方法3: fallback 用 dumpsys window
+        // 方法3: fallback dumpsys window
         try {
             val proc = Runtime.getRuntime().exec("dumpsys window 2>/dev/null | grep mCurrentFocus | cut -d' ' -f5 | cut -d'/' -f1")
             val reader = java.io.BufferedReader(java.io.InputStreamReader(proc.inputStream))
@@ -195,11 +217,12 @@ class OverlayService : Service() {
         return null
     }
 
-    private fun handleAppSwitch(pkg: String) {
+    private fun handleAppSwitch(pkg: String, oldPkg: String) {
         when {
             pkg.contains("termux") -> {
+                isMiniPeek = false  // 进入 Termux 时退出边缘模式
                 pushState("typing", "⌨️ Termux 中...")
-                // 离开 Termux 时恢复，通过轮询检测
+                // 离开 Termux 时恢复由轮询中的 app 切换处理
             }
             pkg.contains("microsoft.emmx") || pkg.contains("edge") -> {
                 pushStateOnce("debugger", "🔍 Edge 浏览器")
@@ -211,8 +234,10 @@ class OverlayService : Service() {
                 pushStateOnce("reading", "📖 看笔记")
             }
             else -> {
-                // 非特殊 App，恢复待机
-                if (!isMiniPeek) {
+                // 非特殊 App，恢复待机或边缘模式
+                if (isMiniPeek) {
+                    pushState("peek", "🦀 偷偷看")
+                } else {
                     pushState("idle", "🦀")
                 }
             }
@@ -239,18 +264,18 @@ class OverlayService : Service() {
         }
     }
 
-    private var lastOnceState = ""
     private fun pushStateOnce(state: String, text: String) {
         if (state == lastOnceState) return
         lastOnceState = state
+        isMiniPeek = false  // 播放 once 动画时退出边缘模式
         pushState(state, text)
         // 3秒后自动恢复
         handler.postDelayed({
             lastOnceState = ""
-            if (!isMiniPeek) {
-                pushState("idle", "🦀")
-            } else {
+            if (isMiniPeek) {
                 pushState("peek", "🦀 偷偷看")
+            } else {
+                pushState("idle", "🦀")
             }
         }, 3000)
     }
@@ -287,14 +312,11 @@ class OverlayService : Service() {
                     val dy = (event.rawY - initialTouchY).toInt()
                     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
                         hasMoved = true
-                        // 计算新位置并限制在屏幕内
                         var newX = initialX + dx
                         var newY = initialY + dy
                         val petW = dpToPx(PET_SIZE_DP)
                         val petH = dpToPx(PET_HEIGHT_DP)
-                        // 限制左右边界 (0 ~ 屏幕宽度-宠物宽度)
                         newX = newX.coerceIn(0, screenWidth - petW)
-                        // 限制上下边界 (0 ~ 屏幕高度-宠物高度)
                         newY = newY.coerceIn(0, resources.displayMetrics.heightPixels - petH)
                         params?.x = newX
                         params?.y = newY
@@ -314,7 +336,7 @@ class OverlayService : Service() {
                             }
                         }
                     } else {
-                        // 松手后立即吸附边缘 (不用等 2 秒轮询)
+                        // 松手后立即吸附边缘
                         checkEdgePosition()
                     }
                     true

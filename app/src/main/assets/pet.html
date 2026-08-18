@@ -56,16 +56,16 @@ var PET = {
         thinking:   { file: 'clawd-thinking.gif',       text: '💭' },
         typing:     { file: 'clawd-typing.gif',          text: '⌨️' },
         working:    { file: 'clawd-typing.gif',          text: '⌨️' },
-        charging:   { file: 'clawd-error.gif',           text: '🔋' },
+        charging:   { file: 'clawd-error.gif',           text: '🔋', once: true, onceDuration: 2000 },
         sleeping:   { file: 'clawd-sleeping.gif',        text: '💤' },
         celebrate:  { file: 'clawd-juggling.gif',        text: '🎉' },
-        error:      { file: 'clawd-error.gif',           text: '😱' },
+        error:      { file: 'clawd-error.gif',           text: '😱', once: true, onceDuration: 2000 },
         happy:      { file: 'clawd-happy.gif',           text: '😊' },
-        annoyed:    { file: 'clawd-error.gif',            text: '😤' },
+        annoyed:    { file: 'clawd-error.gif',            text: '😤', once: true, onceDuration: 1500 },
         juggling:   { file: 'clawd-juggling.gif',        text: '🤹' },
-        reading:    { file: 'clawd-idle-reading.gif',    text: '📖' },
-        debugger:   { file: 'clawd-debugger.gif',        text: '🔍' },
-        groove:     { file: 'clawd-headphones-groove.gif',text: '🎵' },
+        reading:    { file: 'clawd-idle-reading.gif',    text: '📖', once: true, onceDuration: 3000 },
+        debugger:   { file: 'clawd-debugger.gif',        text: '🔍', once: true, onceDuration: 2500 },
+        groove:     { file: 'clawd-headphones-groove.gif',text: '🎵', once: true, onceDuration: 3000 },
         bubble:     { file: 'clawd-bubble.gif',          text: '🫧' },
         building:   { file: 'clawd-building.gif',        text: '🔧' },
         carrying:   { file: 'clawd-carrying.gif',        text: '📦' },
@@ -75,7 +75,7 @@ var PET = {
         peek:       { file: 'clawd-mini-peek.gif',        text: '🦀 偷偷看' },
         mini:       { file: 'clawd-mini-idle.gif',        text: '🦀' },
     },
-    currentState: 'idle', curFile: null, timer: null,
+    currentState: 'idle', curFile: null, timer: null, onceTimer: null,
 
     init() { this.load('idle', '🦀'); window.petEngine = this; },
 
@@ -90,6 +90,30 @@ var PET = {
         else { img = document.createElement('img'); img.src = s.file; img.alt = state; pet.appendChild(img); }
         if (text) this.bubble(text);
         else this.bubble(s.text);
+
+        // Once-only playback: show GIF for one cycle, then freeze last frame
+        if (this.onceTimer) clearTimeout(this.onceTimer);
+        this.onceTimer = null;
+        if (s.once) {
+            var self = this;
+            var loadState = state;
+            this.onceTimer = setTimeout(function() {
+                // Only freeze if we're still in the same state
+                if (self.currentState === loadState) {
+                    var petEl = document.getElementById('pet');
+                    var imgEl = petEl.querySelector('img');
+                    if (imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
+                        var canvas = document.createElement('canvas');
+                        canvas.width = imgEl.naturalWidth;
+                        canvas.height = imgEl.naturalHeight;
+                        var ctx = canvas.getContext('2d');
+                        ctx.drawImage(imgEl, 0, 0);
+                        // Replace GIF with frozen frame (stops animation)
+                        imgEl.src = canvas.toDataURL();
+                    }
+                }
+            }, s.onceDuration || 2500);
+        }
     },
 
     bubble(text) {
@@ -126,6 +150,3 @@ PET.init();
 </script>
 </body>
 </html>
-HTMLEOF
-
-echo "pet.html 已更新 - 支持所有新状态"
