@@ -199,8 +199,8 @@ var PET = {
         var s = this.states[state] || this.states.idle;
         if (s.file === this.curFile && state === this.currentState && !text) return;
         this.setAnim(state);
-        if (text) this.bubble(text, 1800);
-        else this.bubble(s.text, 1800);
+        if (text) this.bubble(text, 1500);
+        else this.bubble(s.text, 1500);
     },
 
     // 统一气泡队列：每条气泡必须显示完全，才显示下一条；换动画/换状态都不打断
@@ -235,10 +235,10 @@ var PET = {
         }, item.dur);
     },
 
-    // AI 生成的气泡：按字数给时长——短句快闪、长句留够阅读时间（1.8s~3.2s），期间任何动画切换都不打断它
+    // AI 生成的气泡：按字数给时长——短句快闪、长句留够阅读时间（1.5s~2.6s），期间任何动画切换都不打断它
     aiBubble(text) {
         var n = text ? text.length : 0;
-        var dur = Math.max(1800, Math.min(3200, 1500 + n * 110));
+        var dur = Math.max(1500, Math.min(2600, 1200 + n * 90));
         this.bubble(text, dur);
     },
     // 多条 AI 气泡按顺序播放（进 App 的两句：第一句播完才显示第二句）

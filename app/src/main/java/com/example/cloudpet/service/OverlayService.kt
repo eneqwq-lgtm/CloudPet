@@ -415,10 +415,10 @@ class OverlayService : Service() {
         }
     }
 
-    /** 进 App 时的秒回气泡：1.5 秒短反馈，不等 AI 生成。 */
+    /** 进 App 时的秒回气泡：1.2 秒短反馈，不等 AI 生成。 */
     private fun quickBubble(text: String) {
         overlayView?.evaluateJavascript(
-            "window.petEngine && window.petEngine.bubble(${jsStr(text)}, 1500)", null)
+            "window.petEngine && window.petEngine.bubble(${jsStr(text)}, 1200)", null)
     }
 
     /** 动画名 → 秒回 emoji。 */
@@ -669,9 +669,9 @@ class OverlayService : Service() {
     private fun noteState(animation: String, activity: String, lines: Int = 1, fromAppSwitch: Boolean = false) {
         val now = System.currentTimeMillis()
         if (aiGenerating || now - lastNoteAt < 2000) return   // 有请求在途或刚才说过，先歇一下（2s 内不连发）
-        // 同 App 内气泡还在显示（3.5s内）不打断，避免读到一半跳走
+        // 同 App 内气泡还在显示（3s内）不打断，避免读到一半跳走
         // 切 App 时 handleAppSwitch 会清空 lastBubbleShownAt，所以不受此限制
-        if (now - lastBubbleShownAt < 3500 && lastBubbleShownAt > 0 && !fromAppSwitch) return
+        if (now - lastBubbleShownAt < 3000 && lastBubbleShownAt > 0 && !fromAppSwitch) return
         lastNoteAt = now
         aiGenerating = true
         val currentGen = generationId  // 记录当前世代，回调时检查是否过期
@@ -741,7 +741,7 @@ class OverlayService : Service() {
         val now = System.currentTimeMillis()
         if (now - lastUserActionAt < 60 * 60 * 1000L) return
         if (now - lastMurmurAt < 60 * 60 * 1000L) return   // 防连发
-        if (now - lastBubbleShownAt < 3500 && lastBubbleShownAt > 0) return
+        if (now - lastBubbleShownAt < 3000 && lastBubbleShownAt > 0) return
         lastMurmurAt = now
         aiGenerating = true
         val currentGen = generationId
