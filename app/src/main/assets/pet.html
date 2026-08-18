@@ -22,6 +22,17 @@ html, body {
 #pet img {
     width: 90%; height: 90%;
     object-fit: contain;
+    transform-origin: center;
+}
+/* mini/peek 态：缩小螃蟹，只在边缘显示 */
+#pet.mini img {
+    width: 52%; height: 52%;
+}
+/* 贴靠哪边就让它在窗口里贴近对应边缘，不居中留白 */
+#pet.mini.left { justify-content: flex-start; }
+#pet.mini.right { justify-content: flex-end; }
+#pet.mini.flip img {
+    transform: scaleX(-1);
 }
 #bubble {
     position: absolute;
@@ -30,17 +41,18 @@ html, body {
     bottom: 60%;
     background: rgba(255,255,255,0.9);
     color: #333;
-    padding: 2px 6px;
+    padding: 3px 7px;
     border-radius: 6px;
-    font-size: 9px;
+    font-size: 11px;
     font-family: sans-serif;
     text-align: center;
     opacity: 0;
     transition: opacity 0.2s;
-    max-width: 90%;
-    line-height: 1.3;
+    max-width: 100%;
+    line-height: 1.4;
     pointer-events: none;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
 }
 #bubble.show { opacity: 1; }
 </style>
@@ -52,7 +64,7 @@ html, body {
 <script>
 var PET = {
     states: {
-        idle:       { file: 'clawd-idle.gif',           text: '🦀' },
+        idle:       { file: 'clawd-idle.gif',           text: '' },
         thinking:   { file: 'clawd-thinking.gif',       text: '💭' },
         typing:     { file: 'clawd-typing.gif',          text: '⌨️' },
         working:    { file: 'clawd-typing.gif',          text: '⌨️' },
@@ -72,24 +84,88 @@ var PET = {
         conducting: { file: 'clawd-conducting.gif',      text: '🎶' },
         notification: { file: 'clawd-notification.gif',   text: '🔔' },
         sweeping:   { file: 'clawd-sweeping.gif',        text: '🧹' },
-        peek:       { file: 'clawd-mini-peek.gif',        text: '🦀 偷偷看' },
-        mini:       { file: 'clawd-mini-idle.gif',        text: '🦀' },
+        peek:        { file: 'clawd-mini-peek.gif',        text: '' },
+        mini:        { file: 'clawd-mini-idle.gif',        text: '' },
+        screenshot: { file: 'clawd-react-double-jump.gif', text: '📸 截到我了!' },
     },
     currentState: 'idle', curFile: null, timer: null, onceTimer: null,
+    _bubbleQueue: [], _showingBubble: false, _bubbleTimer: null,
+    randomActs: [
+        { file: 'clawd-react-annoyed.gif',    text: '😤' },
+        { file: 'clawd-react-double-jump.gif',text: '🤸' },
+    ],
 
-    init() { this.load('idle', '🦀'); window.petEngine = this; },
+    init() { this.load('idle', ''); window.petEngine = this; this.startIdleRandom(); },
 
-    load(state, text) {
+    // 空闲满 IDLE_MS 无动作时，随机播一个未配置过的动图（看完回到 idle 重新计时）
+    startIdleRandom() {
+        var self = this;
+        var idleSince = null;       // 进入空闲态的时刻（ms）
+        var IDLE_MS = 5000;        // 无动作持续5秒触发
+        var TICK = 1000;            // 每秒检查一次
+        setInterval(function() {
+            if (self.randomActive) return;
+            if (self.currentState === 'idle') {
+                if (idleSince === null) idleSince = Date.now();
+                if (Date.now() - idleSince >= IDLE_MS) {
+                    idleSince = null;   // 触发后重置，看完动画重新等10秒
+                    self.idlePlay();
+                }
+            } else {
+                idleSince = null;   // 一旦离开空闲态（有点动作），计时清零
+            }
+        }, TICK);
+    },
+    idlePlay() {
+        if (this.randomActive) return;
+        var a = this.randomActs[Math.floor(Math.random() * this.randomActs.length)];
+        var pet = document.getElementById('pet');
+        var img = pet.querySelector('img');
+        if (!img) return;
+        this.randomActive = true;
+        this.curFile = a.file;  // 让结束后 load('idle') 能识别文件变了而真正重载
+        img.src = a.file;
+        img.alt = a.text;
+        // 待机随机播放：不冒气泡，只换动图
+        var self = this;
+        var playerConfigured = this.onceTimer; if (playerConfigured) clearTimeout(this.onceTimer);
+        this.onceTimer = setTimeout(function() {
+            self.randomActive = false;
+            self.load(self.currentState, '');
+        }, 2600);
+    },
+
+    // 记录当前贴靠的边缘方向，用于 mini 态镜像翻转
+    setEdge(side) {
+        this.edge = side || 'left';
+        this.applyEdge();
+    },
+    applyEdge() {
+        var pet = document.getElementById('pet');
+        var img = pet.querySelector('img');
+        if (!img) return;
+        var isMini = (this.currentState === 'peek' || this.currentState === 'mini');
+        pet.classList.toggle('mini', isMini);
+        // 清除旧的边缘类后按当前边缘设置，让小螃蟹在窗口里贴近屏幕边
+        pet.classList.remove('left', 'right');
+        var side = this.edge || 'left';
+        pet.classList.add(side === 'right' ? 'right' : 'left');
+        // 左边原始朝向探向屏幕内；右边镜像翻转，让螃蟹朝右甩向屏幕内
+        pet.classList.toggle('flip', isMini && side === 'left');
+    },
+
+    // 只切动画/状态，完全不碰气泡（noteState、恢复待机、边缘吸附用）
+    setAnim(state) {
         var s = this.states[state] || this.states.idle;
-        if (s.file === this.curFile && state === this.currentState && !text) return;
+        if (s.file === this.curFile && state === this.currentState) return;
         this.curFile = s.file;
         this.currentState = state;
         var pet = document.getElementById('pet');
         var img = pet.querySelector('img');
         if (img) { img.src = s.file; img.alt = state; }
         else { img = document.createElement('img'); img.src = s.file; img.alt = state; pet.appendChild(img); }
-        if (text) this.bubble(text);
-        else this.bubble(s.text);
+        // 应用 mini 缩放 / 边缘翻转
+        this.applyEdge();
 
         // Once-only playback: show GIF for one cycle, then freeze last frame
         if (this.onceTimer) clearTimeout(this.onceTimer);
@@ -116,32 +192,72 @@ var PET = {
         }
     },
 
-    bubble(text) {
+    // Kotlin 静默切动画：只换 GIF，绝不打断正在显示的气泡
+    switchAnim(state) { this.setAnim(state); },
+
+    load(state, text) {
+        var s = this.states[state] || this.states.idle;
+        if (s.file === this.curFile && state === this.currentState && !text) return;
+        this.setAnim(state);
+        if (text) this.bubble(text, 5000);
+        else this.bubble(s.text, 5000);
+    },
+
+    // 统一气泡队列：每条气泡必须显示完全，才显示下一条；换动画/换状态都不打断
+    bubble(text, duration) {
         var el = document.getElementById('bubble');
         if (!el) return;
-        el.textContent = text;
+        if (!text) {   // 空文案 = 静默意图（回桌面等）：清队列并隐藏
+            this._bubbleQueue = [];
+            if (this._bubbleTimer) clearTimeout(this._bubbleTimer);
+            this._bubbleTimer = null;
+            this._showingBubble = false;
+            el.classList.remove('show');
+            return;
+        }
+        this._bubbleQueue.push({ text: text, dur: duration || 3000 });
+        if (this._bubbleQueue.length > 8) this._bubbleQueue.splice(0, this._bubbleQueue.length - 8); // 防堆积，丢最旧未显示的
+        this._pumpBubble();
+    },
+    _pumpBubble() {
+        if (this._showingBubble || this._bubbleQueue.length === 0) return;
+        var el = document.getElementById('bubble');
+        var item = this._bubbleQueue.shift();
+        el.textContent = item.text;
         el.classList.add('show');
-        if (this.timer) clearTimeout(this.timer);
-        this.timer = setTimeout(function(){ el.classList.remove('show'); }, 2500);
+        this._showingBubble = true;
+        var self = this;
+        this._bubbleTimer = setTimeout(function() {
+            el.classList.remove('show');
+            self._showingBubble = false;
+            self._bubbleTimer = null;
+            self._pumpBubble();   // 播完一条，自动播下一条
+        }, item.dur);
+    },
+
+    // AI 生成的气泡：播满 10 秒，期间任何动画切换都不打断它
+    aiBubble(text) { this.bubble(text, 10000); },
+    // 多条 AI 气泡按顺序播放（进 App 的两句：第一句播完才显示第二句）
+    aiBubbleSeq(texts) {
+        if (!texts || !texts.length) return;
+        var self = this;
+        for (var i = 0; i < texts.length; i++) this.aiBubble(texts[i]);
     },
 
     setState(state, text) { this.load(state, text || ''); },
 
     onTap() {
-        this.bubble(['😊','🦀','👋','🥰','😄'][Math.floor(Math.random()*5)]);
-        this.load('happy', '');
+        this.load('happy', ['😊','🦀','👋','🥰','😄'][Math.floor(Math.random()*5)]);
         var self = this;
         setTimeout(function(){ self.load(self.currentState, ''); }, 1200);
     },
     onDoubleTap() {
-        this.bubble(['🎉','✨','💕','🦀🦀'][Math.floor(Math.random()*4)]);
-        this.load('juggling', '');
+        this.load('juggling', ['🎉','✨','💕','🦀🦀'][Math.floor(Math.random()*4)]);
         var self = this;
         setTimeout(function(){ self.load(self.currentState, ''); }, 1500);
     },
     onLongPress() {
-        this.bubble(['😤','😒','💢'][Math.floor(Math.random()*3)]);
-        this.load('annoyed', '');
+        this.load('annoyed', ['😤','😒','💢'][Math.floor(Math.random()*3)]);
         var self = this;
         setTimeout(function(){ self.load(self.currentState, ''); }, 1000);
     }

@@ -1,6 +1,7 @@
 package com.example.cloudpet
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -10,11 +11,14 @@ import android.widget.Button
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.example.cloudpet.service.OverlayService
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val OVERLAY_PERMISSION_REQUEST = 1001
+        private const val MEDIA_PERMISSION_REQUEST = 1002
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,6 +33,10 @@ class MainActivity : AppCompatActivity() {
             if (!checkUsageStatsPermission()) {
                 Toast.makeText(this, "需要先授予\"使用情况访问\"权限", Toast.LENGTH_LONG).show()
                 requestUsageStatsPermission()
+                return@setOnClickListener
+            }
+            if (!checkMediaPermission()) {
+                requestMediaPermission()
                 return@setOnClickListener
             }
             startPetService()
@@ -87,6 +95,33 @@ class MainActivity : AppCompatActivity() {
                 }
             } else {
                 Toast.makeText(this, "需要悬浮窗权限才能显示云宝", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun requestMediaPermission() {
+        val perm = if (Build.VERSION.SDK_INT >= 33) "android.permission.READ_MEDIA_IMAGES"
+                   else "android.permission.READ_EXTERNAL_STORAGE"
+        ActivityCompat.requestPermissions(this, arrayOf(perm), MEDIA_PERMISSION_REQUEST)
+        Toast.makeText(this, "需要\"照片\"权限才能检测截屏", Toast.LENGTH_LONG).show()
+    }
+
+    private fun checkMediaPermission(): Boolean {
+        val perm = if (Build.VERSION.SDK_INT >= 33) "android.permission.READ_MEDIA_IMAGES"
+                   else "android.permission.READ_EXTERNAL_STORAGE"
+        return ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == MEDIA_PERMISSION_REQUEST) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startPetService()
+            } else {
+                Toast.makeText(this, "未授予照片权限，截屏检测将不可用，可直接再次点击开始", Toast.LENGTH_LONG).show()
+                startPetService()
             }
         }
     }
