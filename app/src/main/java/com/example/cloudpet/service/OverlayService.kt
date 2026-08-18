@@ -117,7 +117,7 @@ class OverlayService : Service() {
     private var lastMurmurAt = 0L
     private var lastScreenOn = true
 
-    // 本地碎碎念库：AI 掉线/超时时的兜底（30 分钟才一条，什么内容都可以）
+    // 本地碎碎念库：AI 掉线/超时时的兜底（60 分钟才一条，什么内容都可以）
     private val murmurs = listOf(
         "呼~ 好安静呀", "小克在数云朵，1、2、3", "记得喝水哦~", "屏幕盯久了，眨眨眼吧",
         "伸个懒腰~ 舒服", "今天天气好像不错", "想听你讲个故事", "小克打了个哈欠~",
@@ -644,7 +644,7 @@ class OverlayService : Service() {
         if (aiGenerating || now - lastNoteAt < 2000) return   // 有请求在途或刚才说过，先歇一下（2s 内不连发）
         // 同 App 内气泡还在显示（10s内）不打断，避免读到一半跳走
         // 切 App 时 handleAppSwitch 会清空 lastBubbleShownAt，所以不受此限制
-        if (now - lastBubbleShownAt < 10000 && lastBubbleShownAt > 0 && !fromAppSwitch) return
+        if (now - lastBubbleShownAt < 6500 && lastBubbleShownAt > 0 && !fromAppSwitch) return
         lastNoteAt = now
         aiGenerating = true
         val currentGen = generationId  // 记录当前世代，回调时检查是否过期
@@ -708,19 +708,19 @@ class OverlayService : Service() {
         lastUserActionAt = System.currentTimeMillis()
     }
 
-    /** 30 分钟没有任何操作 → 自己碎碎念一句（AI 优先，失败用本地库）。 */
+    /** 30 分钟没有任何操作 → 自己碎碎念一句（AI 优先，失败用本地库）。改成 60 分钟一次，避免太频繁。 */
     private fun maybeMurmur() {
         if (aiGenerating) return
         val now = System.currentTimeMillis()
-        if (now - lastUserActionAt < 30 * 60 * 1000L) return
-        if (now - lastMurmurAt < 30 * 60 * 1000L) return   // 防连发
-        if (now - lastBubbleShownAt < 10000 && lastBubbleShownAt > 0) return
+        if (now - lastUserActionAt < 60 * 60 * 1000L) return
+        if (now - lastMurmurAt < 60 * 60 * 1000L) return   // 防连发
+        if (now - lastBubbleShownAt < 6500 && lastBubbleShownAt > 0) return
         lastMurmurAt = now
         aiGenerating = true
         val currentGen = generationId
         val phase = timePhase()
         ai.generate(
-            "主人已经有 30 分钟没有操作设备了，屏幕还亮着，现在是$phase。你现在可以随意碎碎念一句，自言自语，什么内容都可以，一句话，不超过15个字，可带1个emoji。",
+            "主人已经一个多小时没有操作设备了，屏幕还亮着，现在是$phase。你现在可以随意碎碎念一句，自言自语，什么内容都可以，一句话，不超过15个字，可带1个emoji。",
             recentBubbles.toList(), 1
         ) { result ->
             if (currentGen != generationId) return@generate
