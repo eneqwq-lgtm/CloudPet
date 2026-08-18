@@ -379,6 +379,7 @@ class OverlayService : Service() {
 
         if (pkg.contains("termux")) {
             isMiniPeek = false  // 进入 Termux 时退出边缘模式
+            quickBubble("⌨️")
             noteState("typing", "在 Termux 里敲代码", fromAppSwitch = true)
             return
         }
@@ -389,6 +390,8 @@ class OverlayService : Service() {
             val activity = if (label != null && !label.contains(info.second.take(3))) {
                 "$label（${info.second}）"
             } else info.second
+            // 先秒回一条即时气泡（不等 AI），AI 的独特文案随后排队跟上
+            quickBubble(quickEmojiFor(info.first))
             // 每个 App 进来自动弹 2 条气泡：第一句回应当前场景，第二句随性补充（队列顺序播放）
             noteState(info.first, activity, lines = 2, fromAppSwitch = true)
             return
@@ -402,6 +405,7 @@ class OverlayService : Service() {
             // 保证设备上每个 App 打开都有自己独特的气泡
             val label = appLabel(pkg)
             if (label != null && !isSystemApp(pkg)) {
+                quickBubble("🤔")
                 noteState("thinking", "用「$label」", lines = 2, fromAppSwitch = true)
             } else {
                 // 系统组件/后台服务 → 安静待机，不打扰
@@ -409,6 +413,29 @@ class OverlayService : Service() {
                 else switchAnim("idle")
             }
         }
+    }
+
+    /** 进 App 时的秒回气泡：1.5 秒短反馈，不等 AI 生成。 */
+    private fun quickBubble(text: String) {
+        overlayView?.evaluateJavascript(
+            "window.petEngine && window.petEngine.bubble(${jsStr(text)}, 1500)", null)
+    }
+
+    /** 动画名 → 秒回 emoji。 */
+    private fun quickEmojiFor(animation: String): String = when (animation) {
+        "typing" -> "⌨️"
+        "reading" -> "📖"
+        "debugger" -> "🔍"
+        "bubble" -> "💬"
+        "groove" -> "🎵"
+        "carrying" -> "🛒"
+        "happy" -> "😊"
+        "juggling" -> "🎮"
+        "conducting" -> "📺"
+        "building" -> "🔧"
+        "thinking" -> "🤔"
+        "error" -> "⚡"
+        else -> "☁️"
     }
 
     /** 把前台包名映射成 (动画, 动作描述)；未知/桌面/Termux 返回 null。 */
@@ -642,9 +669,9 @@ class OverlayService : Service() {
     private fun noteState(animation: String, activity: String, lines: Int = 1, fromAppSwitch: Boolean = false) {
         val now = System.currentTimeMillis()
         if (aiGenerating || now - lastNoteAt < 2000) return   // 有请求在途或刚才说过，先歇一下（2s 内不连发）
-        // 同 App 内气泡还在显示（10s内）不打断，避免读到一半跳走
+        // 同 App 内气泡还在显示（3.5s内）不打断，避免读到一半跳走
         // 切 App 时 handleAppSwitch 会清空 lastBubbleShownAt，所以不受此限制
-        if (now - lastBubbleShownAt < 6500 && lastBubbleShownAt > 0 && !fromAppSwitch) return
+        if (now - lastBubbleShownAt < 3500 && lastBubbleShownAt > 0 && !fromAppSwitch) return
         lastNoteAt = now
         aiGenerating = true
         val currentGen = generationId  // 记录当前世代，回调时检查是否过期
@@ -714,7 +741,7 @@ class OverlayService : Service() {
         val now = System.currentTimeMillis()
         if (now - lastUserActionAt < 60 * 60 * 1000L) return
         if (now - lastMurmurAt < 60 * 60 * 1000L) return   // 防连发
-        if (now - lastBubbleShownAt < 6500 && lastBubbleShownAt > 0) return
+        if (now - lastBubbleShownAt < 3500 && lastBubbleShownAt > 0) return
         lastMurmurAt = now
         aiGenerating = true
         val currentGen = generationId

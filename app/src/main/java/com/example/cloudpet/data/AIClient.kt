@@ -47,8 +47,8 @@ class AIClient {
                 conn.requestMethod = "POST"
                 conn.setRequestProperty("Authorization", "Bearer $API_KEY")
                 conn.setRequestProperty("Content-Type", "application/json")
-                conn.connectTimeout = 20000
-                conn.readTimeout = 20000
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
                 conn.doOutput = true
 
                 val userMsg = StringBuilder("$context\n")
