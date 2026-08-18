@@ -755,6 +755,9 @@ class OverlayService : Service() {
         if (!screen.isNullOrBlank()) {
             val capped = if (screen.length > 400) screen.substring(0, 400) + "…" else screen
             sb.append("屏幕上我能看到的文字：$capped")
+        } else {
+            // 无障碍没开/暂无内容：明确告诉 AI 看不到，防止它瞎编屏幕内容
+            sb.append("（我现在看不到屏幕上的文字，不要凭空想象屏幕内容）")
         }
         // ===== 设备状态全量采集（给 AI 当背景信息，人设已约束别老提这些细节）=====
         val dev = StringBuilder()
