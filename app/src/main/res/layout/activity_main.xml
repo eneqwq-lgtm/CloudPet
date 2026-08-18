@@ -14,6 +14,9 @@
     <Button android:id="@+id/btn_start" android:layout_width="match_parent"
         android:layout_height="56dp" android:text="召唤Clawd" android:textSize="16dp"
         android:backgroundTint="#4a6cf7" android:layout_marginBottom="16dp" />
+    <Button android:id="@+id/btn_usage_access" android:layout_width="match_parent"
+        android:layout_height="48dp" android:text="授权使用情况访问" android:textSize="14dp"
+        android:backgroundTint="#2d5a3e" android:layout_marginBottom="16dp" />
     <Button android:id="@+id/btn_stop" android:layout_width="match_parent"
         android:layout_height="56dp" android:text="让Clawd休息" android:textSize="16dp"
         android:backgroundTint="#6c757d" />

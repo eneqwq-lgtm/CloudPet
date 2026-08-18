@@ -1,13 +1,16 @@
 package com.example.cloudpet.service
 
 import android.app.*
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.PixelFormat
 import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
+import android.os.Process
 import android.provider.Settings
 import android.view.*
 import android.view.inputmethod.InputMethodManager
@@ -161,10 +164,15 @@ class OverlayService : Service() {
                     checkEdgePosition()
                 }
 
-                // 5. Supabase 状态同步
+                // 5. Supabase 状态同步 (仅在没有本地活跃状态时应用)
                 supabase.fetchPetState { state ->
-                    if (state != null) {
-                        pushState(state, "")
+                    if (state != null && lastOnceState.isEmpty() && !lastForegroundApp.contains("termux")) {
+                        // 仅在 idle/peek 时接受远程状态,不覆盖本地活跃状态
+                        if (isMiniPeek) {
+                            pushState("peek", "🦀 偷偷看")
+                        } else {
+                            pushState(state, "")
+                        }
                     }
                 }
 
@@ -173,45 +181,50 @@ class OverlayService : Service() {
         }, 1000)
     }
 
-    private var hasUsageStatsPermission = false
+    private fun hasUsageStatsPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return false
+        return try {
+            val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val mode = appOps.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(), packageName
+            )
+            mode == AppOpsManager.MODE_ALLOWED
+        } catch (_: Exception) { false }
+    }
 
     private fun getForegroundApp(): String? {
-        // 方法1: 使用 UsageStatsManager (需要权限)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        // 前置检查: 用户是否授予了"使用情况访问"权限
+        if (!hasUsageStatsPermission()) return null
+
+        val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val now = System.currentTimeMillis()
+        val window = 300_000L  // 5 分钟窗口
+
+        // 首选: queryEvents 遍历 MOVE_TO_FOREGROUND 事件,取最后一条(最准确)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
             try {
-                val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-                val time = System.currentTimeMillis()
-                val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 300_000, time)
-                if (stats != null && stats.isNotEmpty()) {
-                    val sorted = stats.sortedByDescending { it.lastTimeUsed }
-                    val top = sorted[0].packageName
-                    if (top != packageName) {
-                        hasUsageStatsPermission = true
-                        return top
+                val events = usm.queryEvents(now - window, now)
+                var lastFg: String? = null
+                val event = UsageEvents.Event()
+                while (events.hasNextEvent()) {
+                    events.getNextEvent(event)
+                    if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                        lastFg = event.packageName
                     }
                 }
+                if (lastFg != null && lastFg != packageName) return lastFg
             } catch (_: Exception) {}
         }
-        // 方法2: dumpsys activity recents
+
+        // 兜底: queryUsageStats 按 lastTimeUsed 排序取最近
         try {
-            val proc = Runtime.getRuntime().exec("dumpsys activity recents 2>/dev/null | grep 'Recent #0' | cut -d' ' -f4 | cut -d'/' -f1")
-            val reader = java.io.BufferedReader(java.io.InputStreamReader(proc.inputStream))
-            val pkg = reader.readLine()?.trim()
-            reader.close()
-            proc.waitFor()
-            if (!pkg.isNullOrEmpty() && pkg != packageName) {
-                return pkg
-            }
-        } catch (_: Exception) {}
-        // 方法3: fallback dumpsys window
-        try {
-            val proc = Runtime.getRuntime().exec("dumpsys window 2>/dev/null | grep mCurrentFocus | cut -d' ' -f5 | cut -d'/' -f1")
-            val reader = java.io.BufferedReader(java.io.InputStreamReader(proc.inputStream))
-            val pkg = reader.readLine()?.trim()
-            reader.close()
-            proc.waitFor()
-            if (!pkg.isNullOrEmpty() && pkg != packageName) {
-                return pkg
+            val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - window, now)
+            if (stats != null && stats.isNotEmpty()) {
+                val top = stats.sortedByDescending { it.lastTimeUsed }
+                    .firstOrNull { it.packageName != packageName }
+                    ?.packageName
+                if (top != null) return top
             }
         } catch (_: Exception) {}
         return null
